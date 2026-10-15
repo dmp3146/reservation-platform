@@ -1,0 +1,95 @@
+-- =========================================================
+-- reservation-platform: base schema
+-- Names match the team's database (Spanish); only additions.
+-- =========================================================
+
+CREATE TABLE usuario (
+    id            INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    nombre        VARCHAR(150) NOT NULL,
+    email         VARCHAR(150) NOT NULL UNIQUE,   -- UNIQUE creates the index used by login
+    password_hash VARCHAR(255) NOT NULL,
+    rol           VARCHAR(30)  NOT NULL DEFAULT 'cliente'
+                CHECK (rol IN ('cliente', 'proveedor', 'responsable')),
+    created_at    TIMESTAMP    NOT NULL DEFAULT now()
+);
+
+CREATE TABLE proveedor (
+    id             INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    usuario_id     INTEGER      NOT NULL UNIQUE REFERENCES usuario(id),
+    nombre_negocio VARCHAR(150) NOT NULL,
+    telefono       VARCHAR(30)
+);
+
+CREATE TABLE recurso (
+    id           INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    proveedor_id INTEGER      NOT NULL REFERENCES proveedor(id),
+    nombre       VARCHAR(150) NOT NULL,
+    tipo         VARCHAR(50),
+    activo       BOOLEAN      NOT NULL DEFAULT true
+);
+
+CREATE TABLE agenda (
+    id           INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    proveedor_id INTEGER NOT NULL REFERENCES proveedor(id),
+    recurso_id   INTEGER NOT NULL REFERENCES recurso(id),
+    nombre       VARCHAR(150),
+    activa       BOOLEAN NOT NULL DEFAULT true
+);
+
+CREATE TABLE horario_disponible (
+    id                INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    agenda_id         INTEGER NOT NULL REFERENCES agenda(id),
+    dia_semana        INTEGER NOT NULL CHECK (dia_semana BETWEEN 0 AND 6),
+    hora_inicio       TIME    NOT NULL,
+    hora_fin          TIME    NOT NULL,
+    duracion_slot_min INTEGER NOT NULL CHECK (duracion_slot_min > 0),
+    CHECK (hora_fin > hora_inicio)
+);
+
+CREATE TABLE reserva (
+    id         INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    usuario_id INTEGER     NOT NULL REFERENCES usuario(id),
+    horario_id INTEGER     NOT NULL REFERENCES horario_disponible(id),
+    fecha      DATE        NOT NULL,
+    hora       TIME        NOT NULL,
+    estado     VARCHAR(20) NOT NULL DEFAULT 'activa'
+            CHECK (estado IN ('activa', 'cancelada', 'completada')),
+    created_at TIMESTAMP   NOT NULL DEFAULT now()
+);
+
+-- Security audit events (guidelines 3.2 and 5.3).
+-- Never store passwords, tokens or unnecessary personal data.
+CREATE TABLE evento_auditoria (
+    id         BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    usuario_id INTEGER REFERENCES usuario(id),   -- null for anonymous failed attempts
+    evento     VARCHAR(50) NOT NULL,             -- e.g. LOGIN_OK, LOGIN_FAILED, PROVIDER_REGISTERED
+    trace_id   VARCHAR(64),
+    created_at TIMESTAMP   NOT NULL DEFAULT now()
+);
+
+-- =========================================================
+-- Indexes (PostgreSQL does NOT index foreign keys automatically)
+-- =========================================================
+-- Prevents double active bookings on the same slot and date
+CREATE UNIQUE INDEX ux_reserva_horario_fecha_activa
+    ON reserva (horario_id, fecha) WHERE estado = 'activa';
+
+CREATE INDEX ix_reserva_usuario    ON reserva (usuario_id, fecha DESC);   -- customer history
+CREATE INDEX ix_recurso_proveedor  ON recurso (proveedor_id);
+CREATE INDEX ix_agenda_proveedor   ON agenda (proveedor_id);
+CREATE INDEX ix_agenda_recurso     ON agenda (recurso_id);
+CREATE INDEX ix_horario_agenda     ON horario_disponible (agenda_id, dia_semana);
+CREATE INDEX ix_auditoria_usuario  ON evento_auditoria (usuario_id, created_at DESC);
+
+-- =========================================================
+-- Security: Supabase exposes tables through a public API (anon key).
+-- With RLS enabled and NO policies, that API can neither read nor write.
+-- Your backend connects as the database owner and is not affected.
+-- =========================================================
+ALTER TABLE usuario            ENABLE ROW LEVEL SECURITY;
+ALTER TABLE proveedor          ENABLE ROW LEVEL SECURITY;
+ALTER TABLE recurso            ENABLE ROW LEVEL SECURITY;
+ALTER TABLE agenda             ENABLE ROW LEVEL SECURITY;
+ALTER TABLE horario_disponible ENABLE ROW LEVEL SECURITY;
+ALTER TABLE reserva            ENABLE ROW LEVEL SECURITY;
+ALTER TABLE evento_auditoria   ENABLE ROW LEVEL SECURITY;
