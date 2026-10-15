@@ -1,0 +1,19 @@
+# Secrets and local configuration
+.env
+*.env
+application-local.properties
+
+# JVM crash logs
+hs_err_pid*.log
+replay_pid*.log
+
+# Editors
+.vscode/
+.idea/
+*.iml
+
+# Build output
+target/
+
+# Documentation kept locally
+/docs/
