@@ -28,8 +28,8 @@
     </scm>
     <properties>
         <java.version>25</java.version>
-        <sonar.organization>YOUR_SONAR_ORGANIZATION</sonar.organization>
-        <sonar.projectKey>YOUR_SONAR_PROJECT_KEY</sonar.projectKey>
+        <sonar.organization>dmp3146</sonar.organization>
+        <sonar.projectKey>dmp3146_reservation-platform</sonar.projectKey>
         <sonar.projectName>reservation-platform</sonar.projectName>
         <sonar.sources>src/main/java</sonar.sources>
         <sonar.tests>src/test/java</sonar.tests>
@@ -83,6 +83,13 @@
             <artifactId>spring-boot-starter-webmvc-test</artifactId>
             <scope>test</scope>
         </dependency>
+        
+        <dependency>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-test</artifactId>
+    <scope>test</scope>
+</dependency>
+
     </dependencies>
 
     <build>
