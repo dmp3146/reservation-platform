@@ -1,0 +1,37 @@
+package com.udea.reservations.platform.bookings.controller;
+
+import com.udea.reservations.platform.auth.security.UserPrincipal;
+import com.udea.reservations.platform.bookings.dto.BookingCreateRequest;
+import com.udea.reservations.platform.bookings.dto.BookingResponse;
+import com.udea.reservations.platform.bookings.service.BookingService;
+import com.udea.reservations.platform.common.dto.ApiSuccessResponse;
+import jakarta.validation.Valid;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+@RestController
+@RequestMapping("/api/v1/bookings")
+public class BookingController {
+
+    private final BookingService bookingService;
+
+    public BookingController(BookingService bookingService) {
+        this.bookingService = bookingService;
+    }
+
+    @PostMapping
+    public ResponseEntity<ApiSuccessResponse<BookingResponse>> create(
+        @Valid @RequestBody BookingCreateRequest request,
+        @AuthenticationPrincipal UserPrincipal principal
+    ) {
+        BookingResponse response = bookingService.create(principal.id(), request);
+        return ResponseEntity.status(HttpStatus.CREATED).body(
+            new ApiSuccessResponse<>("Reserva creada exitosamente.", response)
+        );
+    }
+}

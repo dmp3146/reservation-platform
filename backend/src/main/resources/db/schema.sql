@@ -65,14 +65,28 @@ CREATE TABLE horario_disponible (
 );
 
 CREATE TABLE reserva (
-    id         INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    usuario_id INTEGER     NOT NULL REFERENCES usuario(id),
-    horario_id INTEGER     NOT NULL REFERENCES horario_disponible(id),
-    fecha      DATE        NOT NULL,
-    hora       TIME        NOT NULL,
-    estado     VARCHAR(20) NOT NULL DEFAULT 'activa'
+    id                         INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    usuario_id                 INTEGER NOT NULL REFERENCES usuario(id),
+    horario_id                 INTEGER REFERENCES horario_disponible(id),
+    disponibilidad_servicio_id INTEGER REFERENCES disponibilidad_servicio(id),
+    fecha                      DATE NOT NULL,
+    hora                       TIME NOT NULL,
+    hora_fin                   TIME,
+    estado                     VARCHAR(20) NOT NULL DEFAULT 'activa'
             CHECK (estado IN ('activa', 'cancelada', 'completada')),
-    created_at TIMESTAMP   NOT NULL DEFAULT now()
+    created_at                 TIMESTAMP NOT NULL DEFAULT now(),
+    CONSTRAINT ck_reserva_modelo_disponibilidad CHECK (
+        (horario_id IS NOT NULL
+            AND disponibilidad_servicio_id IS NULL
+            AND hora_fin IS NULL)
+        OR
+        (horario_id IS NULL
+            AND disponibilidad_servicio_id IS NOT NULL
+            AND hora_fin IS NOT NULL)
+    ),
+    CONSTRAINT ck_reserva_hora_fin CHECK (
+        hora_fin IS NULL OR hora_fin > hora
+    )
 );
 
 -- Security audit events (guidelines 3.2 and 5.3).
@@ -91,6 +105,10 @@ CREATE TABLE evento_auditoria (
 -- Prevents double active bookings on the same slot and date
 CREATE UNIQUE INDEX ux_reserva_horario_fecha_activa
     ON reserva (horario_id, fecha) WHERE estado = 'activa';
+
+CREATE UNIQUE INDEX ux_reserva_disponibilidad_fecha_hora_activa
+    ON reserva (disponibilidad_servicio_id, fecha, hora)
+    WHERE estado = 'activa' AND disponibilidad_servicio_id IS NOT NULL;
 
 CREATE INDEX ix_reserva_usuario    ON reserva (usuario_id, fecha DESC);   -- customer history
 CREATE INDEX ix_recurso_proveedor  ON recurso (proveedor_id);
