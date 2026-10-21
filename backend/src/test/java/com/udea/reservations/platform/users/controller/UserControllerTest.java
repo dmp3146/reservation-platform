@@ -10,6 +10,7 @@ import com.udea.reservations.platform.users.dto.UserRegistrationRequest;
 import com.udea.reservations.platform.users.dto.UserResponse;
 import com.udea.reservations.platform.users.exception.EmailAlreadyRegisteredException;
 import com.udea.reservations.platform.users.exception.PasswordMismatchException;
+import com.udea.reservations.platform.users.model.User;
 import com.udea.reservations.platform.users.service.UserService;
 import jakarta.validation.Validation;
 import jakarta.validation.Validator;
@@ -224,6 +225,15 @@ class UserControllerTest {
                 throw failure;
             }
             return Objects.requireNonNull(response);
+        }
+
+        @Override
+        public User registerProviderAccount(
+            UserRegistrationRequest registrationRequest
+        ) {
+            throw new UnsupportedOperationException(
+                "Provider registration is not used by this test."
+            );
         }
     }
 }
