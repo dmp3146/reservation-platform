@@ -12,6 +12,7 @@ import com.udea.reservations.platform.services.dto.ServiceResponse;
 import com.udea.reservations.platform.services.exception.ProviderProfileNotFoundException;
 import com.udea.reservations.platform.services.model.ServiceOffering;
 import com.udea.reservations.platform.services.repository.ServiceRepository;
+import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -51,7 +52,7 @@ class ServiceOfferingServiceImplTest {
         ServiceResponse response = service.createForProvider(42, request);
 
         assertThat(response).isEqualTo(
-            new ServiceResponse(15, "Consulta", "Consulta inicial", 45)
+            new ServiceResponse(15, "Consulta", "Consulta inicial", 45, true)
         );
         assertThat(response.toString()).doesNotContain("providerId");
         verify(providerRepository).findByUser_Id(42);
@@ -86,5 +87,49 @@ class ServiceOfferingServiceImplTest {
             42,
             new ServiceCreateRequest("Consulta", "Consulta inicial", 45)
         )).isSameAs(failure);
+    }
+
+    @Test
+    void returnsOnlyServicesForAuthenticatedProvider() {
+        ServiceOffering active = serviceOffering(15, 7, "Consulta", 45, true);
+        ServiceOffering inactive = serviceOffering(16, 7, "Terapia", 60, false);
+        when(serviceRepository.findAllByProvider_User_IdOrderByIdAsc(42))
+            .thenReturn(List.of(active, inactive));
+
+        List<ServiceResponse> response = service.findForProvider(42);
+
+        assertThat(response).containsExactly(
+            new ServiceResponse(15, "Consulta", "Consulta inicial", 45, true),
+            new ServiceResponse(16, "Terapia", "Consulta inicial", 60, false)
+        );
+        verify(serviceRepository).findAllByProvider_User_IdOrderByIdAsc(42);
+    }
+
+    @Test
+    void returnsEmptyListWhenAuthenticatedProviderHasNoServices() {
+        when(serviceRepository.findAllByProvider_User_IdOrderByIdAsc(42))
+            .thenReturn(List.of());
+
+        assertThat(service.findForProvider(42)).isEmpty();
+        verify(serviceRepository).findAllByProvider_User_IdOrderByIdAsc(42);
+    }
+
+    private static ServiceOffering serviceOffering(
+        Integer id,
+        Integer providerId,
+        String name,
+        Integer duration,
+        boolean active
+    ) {
+        Provider provider = new Provider();
+        provider.setId(providerId);
+        ServiceOffering offering = new ServiceOffering();
+        offering.setId(id);
+        offering.setProvider(provider);
+        offering.setName(name);
+        offering.setDescription("Consulta inicial");
+        offering.setDurationMinutes(duration);
+        offering.setActive(active);
+        return offering;
     }
 }

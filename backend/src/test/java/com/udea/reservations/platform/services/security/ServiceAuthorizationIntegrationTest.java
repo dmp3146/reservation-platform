@@ -22,6 +22,7 @@ import com.udea.reservations.platform.services.service.ServiceOfferingService;
 import com.udea.reservations.platform.users.config.PasswordConfig;
 import com.udea.reservations.platform.users.repository.UserRepository;
 import jakarta.servlet.http.Cookie;
+import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -66,7 +67,7 @@ class ServiceAuthorizationIntegrationTest {
     @BeforeEach
     void setUp() {
         when(service.createForProvider(any(), any())).thenReturn(
-            new ServiceResponse(15, "Consulta", "Consulta inicial", 45)
+            new ServiceResponse(15, "Consulta", "Consulta inicial", 45, true)
         );
     }
 
@@ -88,6 +89,7 @@ class ServiceAuthorizationIntegrationTest {
             .andExpect(jsonPath("$.data.id").value(15))
             .andExpect(jsonPath("$.data.nombre").value("Consulta"))
             .andExpect(jsonPath("$.data.duracionMinutos").value(45))
+            .andExpect(jsonPath("$.data.activo").value(true))
             .andExpect(jsonPath("$.data.providerId").doesNotExist())
             .andExpect(jsonPath("$.data.passwordHash").doesNotExist());
 
@@ -174,6 +176,64 @@ class ServiceAuthorizationIntegrationTest {
             + "\"duracionMinutos\":0}");
         assertValidationFailure("{\"nombre\":\"Consulta\",\"descripcion\":\"desc\","
             + "\"duracionMinutos\":-1}");
+    }
+
+    @Test
+    void providerCanReadOnlyOwnServices() throws Exception {
+        AuthenticatedSession session = authenticatedSession("proveedor", 42);
+        when(service.findForProvider(42)).thenReturn(List.of(
+            new ServiceResponse(15, "Consulta", "Consulta inicial", 45, true),
+            new ServiceResponse(16, "Terapia", "Terapia física", 60, false)
+        ));
+
+        mockMvc.perform(get("/api/v1/providers/me/services?providerId=999")
+                .session(session.session())
+                .cookie(session.cookie()))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.message").value("Servicios consultados exitosamente."))
+            .andExpect(jsonPath("$.data[0].nombre").value("Consulta"))
+            .andExpect(jsonPath("$.data[0].duracionMinutos").value(45))
+            .andExpect(jsonPath("$.data[0].activo").value(true))
+            .andExpect(jsonPath("$.data[1].activo").value(false));
+
+        verify(service).findForProvider(42);
+    }
+
+    @Test
+    void providerWithNoServicesReceivesEmptyList() throws Exception {
+        AuthenticatedSession session = authenticatedSession("proveedor", 42);
+        when(service.findForProvider(42)).thenReturn(List.of());
+
+        mockMvc.perform(get("/api/v1/providers/me/services")
+                .session(session.session())
+                .cookie(session.cookie()))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data").isArray())
+            .andExpect(jsonPath("$.data").isEmpty());
+
+        verify(service).findForProvider(42);
+    }
+
+    @Test
+    void nonProviderCannotReadOwnServices() throws Exception {
+        AuthenticatedSession session = authenticatedSession("cliente", 42);
+
+        mockMvc.perform(get("/api/v1/providers/me/services")
+                .session(session.session())
+                .cookie(session.cookie()))
+            .andExpect(status().isForbidden())
+            .andExpect(jsonPath("$.errorCode").value("ACCESS_DENIED"));
+
+        verifyNoInteractions(service);
+    }
+
+    @Test
+    void anonymousUserCannotReadOwnServices() throws Exception {
+        mockMvc.perform(get("/api/v1/providers/me/services"))
+            .andExpect(status().isUnauthorized())
+            .andExpect(jsonPath("$.errorCode").value("AUTHENTICATION_REQUIRED"));
+
+        verifyNoInteractions(service);
     }
 
     private void assertValidationFailure(String body) throws Exception {

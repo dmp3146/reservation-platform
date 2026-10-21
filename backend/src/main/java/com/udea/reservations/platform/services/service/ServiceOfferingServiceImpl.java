@@ -7,6 +7,7 @@ import com.udea.reservations.platform.services.dto.ServiceResponse;
 import com.udea.reservations.platform.services.exception.ProviderProfileNotFoundException;
 import com.udea.reservations.platform.services.model.ServiceOffering;
 import com.udea.reservations.platform.services.repository.ServiceRepository;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -39,7 +40,24 @@ public class ServiceOfferingServiceImpl implements ServiceOfferingService {
             saved.getId(),
             saved.getName(),
             saved.getDescription(),
-            saved.getDurationMinutes()
+            saved.getDurationMinutes(),
+            saved.getActive()
         );
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<ServiceResponse> findForProvider(Integer authenticatedUserId) {
+        return serviceRepository
+            .findAllByProvider_User_IdOrderByIdAsc(authenticatedUserId)
+            .stream()
+            .map(offering -> new ServiceResponse(
+                offering.getId(),
+                offering.getName(),
+                offering.getDescription(),
+                offering.getDurationMinutes(),
+                offering.getActive()
+            ))
+            .toList();
     }
 }

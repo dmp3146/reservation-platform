@@ -2,6 +2,7 @@ package com.udea.reservations.platform.services.repository;
 
 import com.udea.reservations.platform.services.model.ServiceOffering;
 import jakarta.persistence.LockModeType;
+import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
@@ -10,6 +11,8 @@ import org.springframework.data.repository.query.Param;
 
 public interface ServiceRepository
     extends JpaRepository<ServiceOffering, Integer> {
+
+    List<ServiceOffering> findAllByProvider_User_IdOrderByIdAsc(Integer userId);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select offering from ServiceOffering offering where offering.id = :id")
