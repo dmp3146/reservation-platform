@@ -33,6 +33,7 @@ public class SecurityConfiguration {
 
     private static final String ROLE_PROVIDER = "ROLE_PROVEEDOR";
     private static final String ROLE_CLIENT = "ROLE_CLIENTE";
+    private static final String ROLE_MANAGER = "ROLE_MANAGER";
 
     @Bean
     public CsrfTokenRepository csrfTokenRepository() {
@@ -130,6 +131,8 @@ public class SecurityConfiguration {
                 .hasAuthority(ROLE_PROVIDER)
                 .requestMatchers(HttpMethod.DELETE, "/api/v1/services/*")
                 .hasAuthority(ROLE_PROVIDER)
+                .requestMatchers(HttpMethod.GET, "/api/v1/reports/occupancy")
+                .hasAuthority(ROLE_MANAGER)
                 .requestMatchers(HttpMethod.POST, "/api/v1/providers/me/schedules")
                 .hasAuthority(ROLE_PROVIDER)
                 .requestMatchers(HttpMethod.POST, "/api/v1/bookings")

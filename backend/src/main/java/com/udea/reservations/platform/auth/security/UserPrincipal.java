@@ -16,15 +16,19 @@ public record UserPrincipal(
 
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {
-        String authority = switch (role) {
-            case "cliente" -> "ROLE_CLIENTE";
-            case "proveedor" -> "ROLE_PROVEEDOR";
-            case "responsable" -> "ROLE_RESPONSABLE";
-            default -> null;
+        return switch (role) {
+            case "cliente" -> List.of(
+                new SimpleGrantedAuthority("ROLE_CLIENTE")
+            );
+            case "proveedor" -> List.of(
+                new SimpleGrantedAuthority("ROLE_PROVEEDOR")
+            );
+            case "responsable" -> List.of(
+                new SimpleGrantedAuthority("ROLE_RESPONSABLE"),
+                new SimpleGrantedAuthority("ROLE_MANAGER")
+            );
+            default -> List.of();
         };
-        return authority == null
-            ? List.of()
-            : List.of(new SimpleGrantedAuthority(authority));
     }
 
     @Override
