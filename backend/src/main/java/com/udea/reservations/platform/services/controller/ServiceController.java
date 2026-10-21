@@ -3,6 +3,7 @@ package com.udea.reservations.platform.services.controller;
 import com.udea.reservations.platform.auth.security.UserPrincipal;
 import com.udea.reservations.platform.common.dto.ApiSuccessResponse;
 import com.udea.reservations.platform.services.dto.ServiceCreateRequest;
+import com.udea.reservations.platform.services.dto.ServiceAvailabilityResponse;
 import com.udea.reservations.platform.services.dto.ServiceResponse;
 import com.udea.reservations.platform.services.service.ServiceOfferingService;
 import jakarta.validation.Valid;
@@ -12,6 +13,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -49,6 +51,24 @@ public class ServiceController {
         return new ApiSuccessResponse<>(
             "Servicios consultados exitosamente.",
             response
+        );
+    }
+
+    @GetMapping("/services/available")
+    public ApiSuccessResponse<List<ServiceAvailabilityResponse>> findAvailableServices() {
+        return new ApiSuccessResponse<>(
+            "Servicios con bloques futuros consultados exitosamente.",
+            serviceOfferingService.findAvailableServices()
+        );
+    }
+
+    @GetMapping("/providers/{providerId}/services")
+    public ApiSuccessResponse<List<ServiceAvailabilityResponse>> findProviderServices(
+        @PathVariable Integer providerId
+    ) {
+        return new ApiSuccessResponse<>(
+            "Servicios del proveedor consultados exitosamente.",
+            serviceOfferingService.findActiveServicesByProvider(providerId)
         );
     }
 }

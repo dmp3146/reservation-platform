@@ -50,4 +50,14 @@ public class ScheduleController {
             scheduleService.findByServiceId(serviceId)
         ));
     }
+
+    @GetMapping("/services/{serviceId}/schedules/available")
+    public ResponseEntity<ApiSuccessResponse<List<ScheduleResponse>>> findFutureByService(
+        @PathVariable Integer serviceId
+    ) {
+        return ResponseEntity.ok(new ApiSuccessResponse<>(
+            "Bloques futuros consultados exitosamente.",
+            scheduleService.findFutureByServiceId(serviceId)
+        ));
+    }
 }

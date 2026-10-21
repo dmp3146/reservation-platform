@@ -6,12 +6,15 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.udea.reservations.platform.providers.model.Provider;
+import com.udea.reservations.platform.providers.exception.ProviderNotFoundException;
 import com.udea.reservations.platform.providers.repository.ProviderRepository;
 import com.udea.reservations.platform.services.dto.ServiceCreateRequest;
+import com.udea.reservations.platform.services.dto.ServiceAvailabilityResponse;
 import com.udea.reservations.platform.services.dto.ServiceResponse;
 import com.udea.reservations.platform.services.exception.ProviderProfileNotFoundException;
 import com.udea.reservations.platform.services.model.ServiceOffering;
 import com.udea.reservations.platform.services.repository.ServiceRepository;
+import com.udea.reservations.platform.schedules.repository.ScheduleBlockRepository;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
@@ -28,6 +31,9 @@ class ServiceOfferingServiceImplTest {
 
     @Mock
     private ServiceRepository serviceRepository;
+
+    @Mock
+    private ScheduleBlockRepository scheduleBlockRepository;
 
     @InjectMocks
     private ServiceOfferingServiceImpl service;
@@ -112,6 +118,89 @@ class ServiceOfferingServiceImplTest {
 
         assertThat(service.findForProvider(42)).isEmpty();
         verify(serviceRepository).findAllByProvider_User_IdOrderByIdAsc(42);
+    }
+
+    @Test
+    void listsServicesWithFutureScheduleAndProviderName() {
+        Provider provider = new Provider();
+        provider.setId(7);
+        provider.setBusinessName("Café Ana");
+        ServiceOffering offering = serviceOffering(15, 7, "Consulta", 45, true);
+        offering.setProvider(provider);
+        when(scheduleBlockRepository.findServiceIdsWithFutureSchedules(
+            org.mockito.ArgumentMatchers.any(),
+            org.mockito.ArgumentMatchers.any()
+        )).thenReturn(List.of(15));
+        when(serviceRepository.findAllByIdInAndActiveTrueOrderByIdAsc(
+            org.mockito.ArgumentMatchers.anyCollection()
+        )).thenReturn(List.of(offering));
+
+        assertThat(service.findAvailableServices()).containsExactly(
+            new ServiceAvailabilityResponse(
+                15, "Consulta", 45, 7, "Café Ana", true
+            )
+        );
+    }
+
+    @Test
+    void listsProviderServicesAndIndicatesWhenNoFutureScheduleExists() {
+        Provider provider = new Provider();
+        provider.setId(7);
+        provider.setBusinessName("Café Ana");
+        ServiceOffering offering = serviceOffering(15, 7, "Consulta", 45, true);
+        offering.setProvider(provider);
+        when(providerRepository.existsById(7)).thenReturn(true);
+        when(serviceRepository.findAllByProvider_IdAndActiveTrueOrderByIdAsc(7))
+            .thenReturn(List.of(offering));
+        when(scheduleBlockRepository.findServiceIdsWithFutureSchedulesByProviderId(
+            org.mockito.ArgumentMatchers.eq(7),
+            org.mockito.ArgumentMatchers.any(),
+            org.mockito.ArgumentMatchers.any()
+        )).thenReturn(List.of());
+
+        assertThat(service.findActiveServicesByProvider(7)).containsExactly(
+            new ServiceAvailabilityResponse(
+                15, "Consulta", 45, 7, "Café Ana", false
+            )
+        );
+    }
+
+    @Test
+    void returnsEmptyListWhenProviderHasNoActiveServices() {
+        when(providerRepository.existsById(7)).thenReturn(true);
+        when(serviceRepository.findAllByProvider_IdAndActiveTrueOrderByIdAsc(7))
+            .thenReturn(List.of());
+        when(scheduleBlockRepository.findServiceIdsWithFutureSchedulesByProviderId(
+            org.mockito.ArgumentMatchers.eq(7),
+            org.mockito.ArgumentMatchers.any(),
+            org.mockito.ArgumentMatchers.any()
+        )).thenReturn(List.of());
+
+        assertThat(service.findActiveServicesByProvider(7)).isEmpty();
+    }
+
+    @Test
+    void rejectsServicesLookupForUnknownProvider() {
+        when(providerRepository.existsById(99)).thenReturn(false);
+
+        assertThatThrownBy(() -> service.findActiveServicesByProvider(99))
+            .isInstanceOf(ProviderNotFoundException.class);
+        org.mockito.Mockito.verifyNoInteractions(scheduleBlockRepository);
+        org.mockito.Mockito.verifyNoInteractions(serviceRepository);
+    }
+
+    @Test
+    void availableServiceListIsEmptyWhenNoServiceHasFutureSchedule() {
+        when(scheduleBlockRepository.findServiceIdsWithFutureSchedules(
+            org.mockito.ArgumentMatchers.any(),
+            org.mockito.ArgumentMatchers.any()
+        )).thenReturn(List.of());
+
+        assertThat(service.findAvailableServices()).isEmpty();
+        org.mockito.Mockito.verify(serviceRepository, org.mockito.Mockito.never())
+            .findAllByIdInAndActiveTrueOrderByIdAsc(
+                org.mockito.ArgumentMatchers.anyCollection()
+            );
     }
 
     private static ServiceOffering serviceOffering(

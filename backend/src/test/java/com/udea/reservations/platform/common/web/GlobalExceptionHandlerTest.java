@@ -75,6 +75,16 @@ class GlobalExceptionHandlerTest {
     }
 
     @Test
+    @DisplayName("Invalid numeric path parameter returns standard 400")
+    void shouldReturnValidationErrorWhenPathParameterHasWrongType()
+        throws Exception {
+        mockMvc.perform(get("/fake/id/not-a-number"))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.errorCode").value("VALIDATION_ERROR"))
+            .andExpect(jsonPath("$.traceId", notNullValue()));
+    }
+
+    @Test
     @DisplayName("Unexpected errors do not expose internal details")
     void shouldHideInternalDetailsWhenUnexpectedErrorOccurs() throws Exception {
         mockMvc.perform(get("/fake/boom"))
@@ -106,6 +116,11 @@ class GlobalExceptionHandlerTest {
         @GetMapping("/boom")
         public String boom() {
             throw new IllegalStateException("detalle interno secreto");
+        }
+
+        @GetMapping("/id/{id}")
+        public String byId(@org.springframework.web.bind.annotation.PathVariable int id) {
+            return Integer.toString(id);
         }
     }
 }

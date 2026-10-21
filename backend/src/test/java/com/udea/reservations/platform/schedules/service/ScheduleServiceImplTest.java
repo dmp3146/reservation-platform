@@ -266,6 +266,46 @@ class ScheduleServiceImplTest {
             .findAllByService_IdOrderByDateAscStartTimeAsc(99);
     }
 
+    @Test
+    void returnsFutureSchedulesOnlyForActiveService() {
+        ScheduleBlock future = new ScheduleBlock();
+        future.setId(31);
+        future.setService(ownedService);
+        future.setDate(LocalDate.now().plusDays(1));
+        future.setStartTime(LocalTime.of(9, 0));
+        future.setEndTime(LocalTime.of(10, 0));
+        when(serviceRepository.existsById(15)).thenReturn(true);
+        when(scheduleBlockRepository.findFutureByServiceId(
+            org.mockito.ArgumentMatchers.eq(15),
+            org.mockito.ArgumentMatchers.any(LocalDate.class),
+            org.mockito.ArgumentMatchers.any(LocalTime.class)
+        )).thenReturn(List.of(future));
+
+        assertThat(scheduleService.findFutureByServiceId(15)).containsExactly(
+            new ScheduleResponse(
+                31,
+                15,
+                future.getDate(),
+                future.getStartTime(),
+                future.getEndTime()
+            )
+        );
+    }
+
+    @Test
+    void rejectsFutureScheduleLookupForUnknownService() {
+        when(serviceRepository.existsById(99)).thenReturn(false);
+
+        assertThatThrownBy(() -> scheduleService.findFutureByServiceId(99))
+            .isInstanceOf(ServiceNotFoundException.class);
+
+        verify(scheduleBlockRepository, never()).findFutureByServiceId(
+            org.mockito.ArgumentMatchers.eq(99),
+            org.mockito.ArgumentMatchers.any(LocalDate.class),
+            org.mockito.ArgumentMatchers.any(LocalTime.class)
+        );
+    }
+
     private static ScheduleCreateRequest request(
         Integer serviceId,
         LocalDate date,

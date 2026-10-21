@@ -30,6 +30,53 @@ public interface ScheduleBlockRepository
         Integer serviceId
     );
 
+    @Query("""
+        select distinct block.service.id
+        from ScheduleBlock block
+        where block.service.active = true
+          and (
+              block.date > :today
+              or (block.date = :today and block.startTime > :currentTime)
+          )
+        """)
+    List<Integer> findServiceIdsWithFutureSchedules(
+        @Param("today") LocalDate today,
+        @Param("currentTime") LocalTime currentTime
+    );
+
+    @Query("""
+        select distinct block.service.id
+        from ScheduleBlock block
+        where block.service.provider.id = :providerId
+          and block.service.active = true
+          and (
+              block.date > :today
+              or (block.date = :today and block.startTime > :currentTime)
+          )
+        """)
+    List<Integer> findServiceIdsWithFutureSchedulesByProviderId(
+        @Param("providerId") Integer providerId,
+        @Param("today") LocalDate today,
+        @Param("currentTime") LocalTime currentTime
+    );
+
+    @Query("""
+        select block
+        from ScheduleBlock block
+        where block.service.id = :serviceId
+          and block.service.active = true
+          and (
+              block.date > :today
+              or (block.date = :today and block.startTime > :currentTime)
+          )
+        order by block.date asc, block.startTime asc
+        """)
+    List<ScheduleBlock> findFutureByServiceId(
+        @Param("serviceId") Integer serviceId,
+        @Param("today") LocalDate today,
+        @Param("currentTime") LocalTime currentTime
+    );
+
     long countByService_Id(Integer serviceId);
 
     void deleteAllByService_Id(Integer serviceId);

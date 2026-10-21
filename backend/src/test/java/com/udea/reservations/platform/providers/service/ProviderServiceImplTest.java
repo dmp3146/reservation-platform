@@ -2,9 +2,14 @@ package com.udea.reservations.platform.providers.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import com.udea.reservations.platform.providers.dto.ProviderRegistrationRequest;
 import com.udea.reservations.platform.providers.dto.ProviderRegistrationResponse;
+import com.udea.reservations.platform.providers.dto.ProviderPageResponse;
+import com.udea.reservations.platform.providers.dto.ProviderSummaryResponse;
 import com.udea.reservations.platform.providers.model.Provider;
 import com.udea.reservations.platform.providers.repository.ProviderRepository;
 import com.udea.reservations.platform.users.dto.UserRegistrationRequest;
@@ -18,8 +23,55 @@ import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
 import org.junit.jupiter.api.Test;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
 
 class ProviderServiceImplTest {
+
+    @Test
+    void findProvidersReturnsRequestedPageOfBusinessNames() {
+        ProviderRepository repository = mock(ProviderRepository.class);
+        UserService userService = mock(UserService.class);
+        Provider first = new Provider();
+        first.setId(21);
+        first.setBusinessName("Café Ana");
+        PageRequest pageable = PageRequest.of(1, 1);
+        when(repository.findAllByOrderByIdAsc(pageable)).thenReturn(
+            new PageImpl<>(java.util.List.of(first), pageable, 2)
+        );
+
+        ProviderPageResponse response = new ProviderServiceImpl(
+            userService,
+            repository
+        ).findProviders(1, 1);
+
+        assertThat(response.items()).containsExactly(
+            new ProviderSummaryResponse(21, "Café Ana")
+        );
+        assertThat(response.page()).isEqualTo(1);
+        assertThat(response.size()).isEqualTo(1);
+        assertThat(response.totalElements()).isEqualTo(2);
+        assertThat(response.totalPages()).isEqualTo(2);
+        verify(repository).findAllByOrderByIdAsc(pageable);
+    }
+
+    @Test
+    void findProvidersReturnsEmptyPageWhenRepositoryHasNoRows() {
+        ProviderRepository repository = mock(ProviderRepository.class);
+        PageRequest pageable = PageRequest.of(0, 20);
+        when(repository.findAllByOrderByIdAsc(pageable)).thenReturn(
+            new PageImpl<>(java.util.List.of(), pageable, 0)
+        );
+
+        ProviderPageResponse response = new ProviderServiceImpl(
+            mock(UserService.class),
+            repository
+        ).findProviders(0, 20);
+
+        assertThat(response.items()).isEmpty();
+        assertThat(response.totalElements()).isZero();
+        assertThat(response.totalPages()).isZero();
+    }
 
     @Test
     void registerProviderSavesProfileAndReturnsOnlyPublicFields() {
