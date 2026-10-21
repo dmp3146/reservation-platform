@@ -34,6 +34,34 @@ public interface BookingRepository extends JpaRepository<Booking, Integer> {
         @Param("status") String status
     );
 
+    @Query("""
+        select booking
+        from Booking booking
+        left join fetch booking.scheduleBlock block
+        left join fetch block.service offering
+        left join fetch offering.provider provider
+        where booking.user.id = :userId
+        order by booking.date desc, booking.startTime desc, booking.id desc
+        """)
+    List<Booking> findHistoryByUserIdWithDetails(
+        @Param("userId") Integer userId
+    );
+
+    @Query("""
+        select booking
+        from Booking booking
+        left join fetch booking.user customer
+        left join fetch booking.scheduleBlock block
+        left join fetch block.service offering
+        left join fetch offering.provider provider
+        where booking.id = :bookingId
+          and booking.user.id = :userId
+        """)
+    Optional<Booking> findOwnedByIdWithDetails(
+        @Param("bookingId") Integer bookingId,
+        @Param("userId") Integer userId
+    );
+
     @Query(value = """
         select exists (
             select 1

@@ -19,8 +19,10 @@ import com.udea.reservations.platform.auth.security.UserPrincipal;
 import com.udea.reservations.platform.auth.service.AuthServiceImpl;
 import com.udea.reservations.platform.bookings.controller.BookingController;
 import com.udea.reservations.platform.bookings.dto.BookingCreateRequest;
+import com.udea.reservations.platform.bookings.dto.BookingDetailResponse;
 import com.udea.reservations.platform.bookings.dto.BookingResponse;
 import com.udea.reservations.platform.bookings.exception.BookingAlreadyCancelledException;
+import com.udea.reservations.platform.bookings.exception.BookingNotFoundException;
 import com.udea.reservations.platform.bookings.service.BookingService;
 import com.udea.reservations.platform.common.web.GlobalExceptionHandler;
 import com.udea.reservations.platform.users.config.PasswordConfig;
@@ -59,6 +61,10 @@ class BookingAuthorizationIntegrationTest {
     private static final String BOOKING_PATH = "/api/v1/bookings";
     private static final String ACTIVE_BOOKINGS_PATH =
         "/api/v1/bookings/active";
+    private static final String BOOKING_HISTORY_PATH =
+        "/api/v1/bookings/history";
+    private static final String BOOKING_DETAIL_PATH =
+        "/api/v1/bookings/{bookingId}";
     private static final String CANCEL_BOOKING_PATH =
         "/api/v1/bookings/{bookingId}/cancel";
 
@@ -154,6 +160,102 @@ class BookingAuthorizationIntegrationTest {
     }
 
     @Test
+    void clientCanReadFullHistoryAndHeaderCannotChangeIdentity()
+        throws Exception {
+        when(bookingService.findHistoryForCustomer(42)).thenReturn(List.of(
+            new BookingResponse(
+                57, 15, "Consulta", "Café Central",
+                LocalDate.of(2030, 1, 2),
+                LocalTime.of(12, 0), LocalTime.of(12, 30), "completada"
+            ),
+            new BookingResponse(
+                56, 16, "Control", "Clínica Norte",
+                LocalDate.of(2030, 1, 1),
+                LocalTime.of(11, 0), LocalTime.of(11, 45), "cancelada"
+            )
+        ));
+        AuthenticatedSession session = authenticatedSession("cliente", 42);
+
+        mockMvc.perform(get(BOOKING_HISTORY_PATH)
+                .session(session.session())
+                .cookie(session.cookie())
+                .header("X-User-Id", "999"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.length()").value(2))
+            .andExpect(jsonPath("$.data[0].bookingId").value(57))
+            .andExpect(jsonPath("$.data[0].status").value("completada"))
+            .andExpect(jsonPath("$.data[1].bookingId").value(56))
+            .andExpect(jsonPath("$.data[1].status").value("cancelada"));
+
+        verify(bookingService).findHistoryForCustomer(42);
+    }
+
+    @Test
+    void historyReturnsEmptyArrayWhenCustomerHasNoBookings() throws Exception {
+        when(bookingService.findHistoryForCustomer(42)).thenReturn(List.of());
+        AuthenticatedSession session = authenticatedSession("cliente", 42);
+
+        mockMvc.perform(get(BOOKING_HISTORY_PATH)
+                .session(session.session())
+                .cookie(session.cookie()))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data").isArray())
+            .andExpect(jsonPath("$.data").isEmpty());
+
+        verify(bookingService).findHistoryForCustomer(42);
+    }
+
+    @Test
+    void clientCanReadOwnedBookingDetailWithSafeCustomerFields()
+        throws Exception {
+        when(bookingService.findOwnedBooking(42, 55))
+            .thenReturn(new BookingDetailResponse(
+                55,
+                15,
+                "Consulta",
+                "Café Central",
+                "Test User",
+                LocalDate.of(2030, 1, 2),
+                LocalTime.of(9, 30),
+                LocalTime.of(10, 0),
+                "activa"
+            ));
+        AuthenticatedSession session = authenticatedSession("cliente", 42);
+
+        mockMvc.perform(get(BOOKING_DETAIL_PATH, 55)
+                .session(session.session())
+                .cookie(session.cookie())
+                .header("X-User-Id", "999"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.bookingId").value(55))
+            .andExpect(jsonPath("$.data.serviceName").value("Consulta"))
+            .andExpect(jsonPath("$.data.providerName").value("Café Central"))
+            .andExpect(jsonPath("$.data.customerName").value("Test User"))
+            .andExpect(jsonPath("$.data.status").value("activa"))
+            .andExpect(jsonPath("$.data.email").doesNotExist())
+            .andExpect(jsonPath("$.data.passwordHash").doesNotExist());
+
+        verify(bookingService).findOwnedBooking(42, 55);
+    }
+
+    @Test
+    void detailOfMissingOrOtherCustomersBookingUsesUniformNotFoundResponse()
+        throws Exception {
+        when(bookingService.findOwnedBooking(42, 55))
+            .thenThrow(new BookingNotFoundException());
+        AuthenticatedSession session = authenticatedSession("cliente", 42);
+
+        mockMvc.perform(get(BOOKING_DETAIL_PATH, 55)
+                .session(session.session())
+                .cookie(session.cookie()))
+            .andExpect(status().isNotFound())
+            .andExpect(jsonPath("$.errorCode").value("BOOKING_NOT_FOUND"))
+            .andExpect(jsonPath("$.traceId").isNotEmpty());
+
+        verify(bookingService).findOwnedBooking(42, 55);
+    }
+
+    @Test
     void clientCanCancelBookingAndIdentityComesFromSession() throws Exception {
         when(bookingService.cancel(42, 55)).thenReturn(new BookingResponse(
             55,
@@ -223,6 +325,20 @@ class BookingAuthorizationIntegrationTest {
             .andExpect(jsonPath("$.errorCode").value("AUTHENTICATION_REQUIRED"))
             .andExpect(jsonPath("$.traceId").isNotEmpty());
 
+        mockMvc.perform(get(BOOKING_HISTORY_PATH)
+                .session(session.session())
+                .cookie(session.cookie()))
+            .andExpect(status().isUnauthorized())
+            .andExpect(jsonPath("$.errorCode").value("AUTHENTICATION_REQUIRED"))
+            .andExpect(jsonPath("$.traceId").isNotEmpty());
+
+        mockMvc.perform(get(BOOKING_DETAIL_PATH, 55)
+                .session(session.session())
+                .cookie(session.cookie()))
+            .andExpect(status().isUnauthorized())
+            .andExpect(jsonPath("$.errorCode").value("AUTHENTICATION_REQUIRED"))
+            .andExpect(jsonPath("$.traceId").isNotEmpty());
+
         mockMvc.perform(patch(CANCEL_BOOKING_PATH, 55)
                 .session(session.session())
                 .cookie(session.cookie())
@@ -272,6 +388,21 @@ class BookingAuthorizationIntegrationTest {
                     .session(session.session())
                     .cookie(session.cookie())
                     .header("X-User-Id", "999"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.errorCode").value("ACCESS_DENIED"))
+                .andExpect(jsonPath("$.traceId").isNotEmpty());
+
+            mockMvc.perform(get(BOOKING_HISTORY_PATH)
+                    .session(session.session())
+                    .cookie(session.cookie())
+                    .header("X-User-Id", "999"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.errorCode").value("ACCESS_DENIED"))
+                .andExpect(jsonPath("$.traceId").isNotEmpty());
+
+            mockMvc.perform(get(BOOKING_DETAIL_PATH, 55)
+                    .session(session.session())
+                    .cookie(session.cookie()))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.errorCode").value("ACCESS_DENIED"))
                 .andExpect(jsonPath("$.traceId").isNotEmpty());

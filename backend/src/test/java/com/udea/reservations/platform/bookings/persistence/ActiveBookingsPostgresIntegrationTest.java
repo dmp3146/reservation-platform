@@ -1,7 +1,9 @@
 package com.udea.reservations.platform.bookings.persistence;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.udea.reservations.platform.bookings.exception.BookingNotFoundException;
 import com.udea.reservations.platform.bookings.model.Booking;
 import com.udea.reservations.platform.bookings.repository.BookingRepository;
 import com.udea.reservations.platform.bookings.service.BookingService;
@@ -56,6 +58,8 @@ class ActiveBookingsPostgresIntegrationTest {
     private Integer providerId;
     private Integer serviceId;
     private Integer scheduleBlockId;
+    private Integer ownedBookingId;
+    private Integer otherCustomerBookingId;
 
     @DynamicPropertySource
     static void configurePostgres(DynamicPropertyRegistry registry) {
@@ -101,11 +105,19 @@ class ActiveBookingsPostgresIntegrationTest {
         block.setEndTime(LocalTime.of(14, 0));
         scheduleBlockId = scheduleBlockRepository.saveAndFlush(block).getId();
 
-        createBooking(customerId, LocalTime.of(11, 0), "activa");
+        ownedBookingId = createBooking(
+            customerId,
+            LocalTime.of(11, 0),
+            "activa"
+        );
         createBooking(customerId, LocalTime.of(9, 0), "activa");
         createBooking(customerId, LocalTime.of(12, 0), "cancelada");
         createBooking(customerId, LocalTime.of(12, 30), "completada");
-        createBooking(otherCustomerId, LocalTime.of(13, 0), "activa");
+        otherCustomerBookingId = createBooking(
+            otherCustomerId,
+            LocalTime.of(13, 0),
+            "activa"
+        );
     }
 
     @AfterEach
@@ -163,6 +175,46 @@ class ActiveBookingsPostgresIntegrationTest {
         userRepository.deleteById(customerWithoutBookings);
     }
 
+    @Test
+    void historyReturnsAllOwnStatesInReverseChronologicalOrder() {
+        var bookings = bookingService.findHistoryForCustomer(customerId);
+
+        assertThat(bookings).hasSize(4);
+        assertThat(bookings)
+            .extracting(booking -> booking.startTime())
+            .containsExactly(
+                LocalTime.of(12, 30),
+                LocalTime.of(12, 0),
+                LocalTime.of(11, 0),
+                LocalTime.of(9, 0)
+            );
+        assertThat(bookings)
+            .extracting(booking -> booking.status())
+            .containsExactly("completada", "cancelada", "activa", "activa");
+        assertThat(bookings)
+            .allSatisfy(booking -> {
+                assertThat(booking.serviceName())
+                    .isEqualTo("Active Booking Service");
+                assertThat(booking.providerName())
+                    .startsWith("Active Booking Provider ");
+            });
+    }
+
+    @Test
+    void detailLoadsServiceProviderAndCustomerOnlyForOwner() {
+        var detail = bookingService.findOwnedBooking(customerId, ownedBookingId);
+
+        assertThat(detail.bookingId()).isEqualTo(ownedBookingId);
+        assertThat(detail.serviceName()).isEqualTo("Active Booking Service");
+        assertThat(detail.providerName())
+            .startsWith("Active Booking Provider ");
+        assertThat(detail.customerName()).isEqualTo("Active booking test");
+
+        assertThatThrownBy(
+            () -> bookingService.findOwnedBooking(customerId, otherCustomerBookingId)
+        ).isInstanceOf(BookingNotFoundException.class);
+    }
+
     private Integer createUser(String emailPrefix, String role) {
         User user = new User();
         user.setName("Active booking test");
@@ -172,7 +224,7 @@ class ActiveBookingsPostgresIntegrationTest {
         return userRepository.saveAndFlush(user).getId();
     }
 
-    private void createBooking(
+    private Integer createBooking(
         Integer bookingCustomerId,
         LocalTime startTime,
         String status
@@ -188,7 +240,7 @@ class ActiveBookingsPostgresIntegrationTest {
         booking.setStartTime(startTime);
         booking.setEndTime(startTime.plusMinutes(30));
         booking.setStatus(status);
-        bookingRepository.saveAndFlush(booking);
+        return bookingRepository.saveAndFlush(booking).getId();
     }
 
     private static String requiredEnvironmentValue(String name) {

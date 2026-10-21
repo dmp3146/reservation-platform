@@ -2,6 +2,7 @@ package com.udea.reservations.platform.bookings.controller;
 
 import com.udea.reservations.platform.auth.security.UserPrincipal;
 import com.udea.reservations.platform.bookings.dto.BookingCreateRequest;
+import com.udea.reservations.platform.bookings.dto.BookingDetailResponse;
 import com.udea.reservations.platform.bookings.dto.BookingResponse;
 import com.udea.reservations.platform.bookings.service.BookingService;
 import com.udea.reservations.platform.common.dto.ApiSuccessResponse;
@@ -57,6 +58,27 @@ public class BookingController {
         return ResponseEntity.ok(new ApiSuccessResponse<>(
             "Reserva cancelada exitosamente.",
             bookingService.cancel(principal.id(), bookingId)
+        ));
+    }
+
+    @GetMapping("/history")
+    public ResponseEntity<ApiSuccessResponse<List<BookingResponse>>> findHistory(
+        @AuthenticationPrincipal UserPrincipal principal
+    ) {
+        return ResponseEntity.ok(new ApiSuccessResponse<>(
+            "Historial de reservas consultado exitosamente.",
+            bookingService.findHistoryForCustomer(principal.id())
+        ));
+    }
+
+    @GetMapping("/{bookingId}")
+    public ResponseEntity<ApiSuccessResponse<BookingDetailResponse>> findById(
+        @PathVariable Integer bookingId,
+        @AuthenticationPrincipal UserPrincipal principal
+    ) {
+        return ResponseEntity.ok(new ApiSuccessResponse<>(
+            "Detalle de reserva consultado exitosamente.",
+            bookingService.findOwnedBooking(principal.id(), bookingId)
         ));
     }
 }
