@@ -8,6 +8,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.udea.reservations.platform.common.web.GlobalExceptionHandler;
 import com.udea.reservations.platform.providers.dto.ProviderRegistrationRequest;
 import com.udea.reservations.platform.providers.dto.ProviderRegistrationResponse;
+import com.udea.reservations.platform.providers.dto.ProviderPageResponse;
+import com.udea.reservations.platform.providers.dto.ProviderSummaryResponse;
 import com.udea.reservations.platform.providers.service.ProviderService;
 import com.udea.reservations.platform.users.exception.EmailAlreadyRegisteredException;
 import com.udea.reservations.platform.users.exception.PasswordMismatchException;
@@ -206,6 +208,61 @@ class ProviderControllerTest {
     }
 
     @Test
+    void findProvidersReturnsPagedBusinessNames() throws Exception {
+        providerService.providerPage = new ProviderPageResponse(
+            java.util.List.of(
+                new ProviderSummaryResponse(21, "Café Ana")
+            ),
+            0,
+            20,
+            1,
+            1
+        );
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                .get("/api/v1/providers"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.items[0].providerId").value(21))
+            .andExpect(jsonPath("$.data.items[0].nombreNegocio").value("Café Ana"))
+            .andExpect(jsonPath("$.data.page").value(0))
+            .andExpect(jsonPath("$.data.size").value(20))
+            .andExpect(jsonPath("$.data.totalElements").value(1))
+            .andExpect(jsonPath("$.data.items[0].email").doesNotExist());
+
+        org.assertj.core.api.Assertions.assertThat(providerService.request)
+            .isNull();
+    }
+
+    @Test
+    void findProvidersReturnsEmptyPageWhenNoProvidersExist() throws Exception {
+        providerService.providerPage = new ProviderPageResponse(
+            java.util.List.of(),
+            0,
+            20,
+            0,
+            0
+        );
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                .get("/api/v1/providers"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.items").isArray())
+            .andExpect(jsonPath("$.data.items").isEmpty())
+            .andExpect(jsonPath("$.data.totalElements").value(0));
+    }
+
+    @Test
+    void findProvidersReturnsStandardErrorForMalformedPageSize()
+        throws Exception {
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                .get("/api/v1/providers")
+                .param("size", "not-a-number"))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.errorCode").value("VALIDATION_ERROR"))
+            .andExpect(jsonPath("$.traceId").isNotEmpty());
+    }
+
+    @Test
     void registerReturns400ForMismatchedPasswords() throws Exception {
         providerService.failure = new PasswordMismatchException();
 
@@ -258,6 +315,7 @@ class ProviderControllerTest {
 
         private ProviderRegistrationRequest request;
         private ProviderRegistrationResponse response;
+        private ProviderPageResponse providerPage;
         private RuntimeException failure;
 
         @Override
@@ -269,6 +327,14 @@ class ProviderControllerTest {
                 throw failure;
             }
             return Objects.requireNonNull(response);
+        }
+
+        @Override
+        public ProviderPageResponse findProviders(int page, int size) {
+            if (failure != null) {
+                throw failure;
+            }
+            return Objects.requireNonNull(providerPage);
         }
     }
 }

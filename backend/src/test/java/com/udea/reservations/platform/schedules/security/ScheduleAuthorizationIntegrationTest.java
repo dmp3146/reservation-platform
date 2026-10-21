@@ -180,6 +180,38 @@ class ScheduleAuthorizationIntegrationTest {
     }
 
     @Test
+    void authenticatedUserCanReadFutureServiceSchedules() throws Exception {
+        AuthenticatedSession session = authenticatedSession("cliente", 42);
+        when(scheduleService.findFutureByServiceId(15)).thenReturn(List.of(
+            new ScheduleResponse(
+                31,
+                15,
+                LocalDate.parse("2026-10-22"),
+                LocalTime.of(9, 0),
+                LocalTime.of(10, 0)
+            )
+        ));
+
+        mockMvc.perform(get("/api/v1/services/15/schedules/available")
+                .session(session.session())
+                .cookie(session.cookie()))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data[0].serviceId").value(15))
+            .andExpect(jsonPath("$.data[0].fecha").value("2026-10-22"));
+
+        verify(scheduleService).findFutureByServiceId(15);
+    }
+
+    @Test
+    void anonymousUserCannotReadFutureServiceSchedules() throws Exception {
+        mockMvc.perform(get("/api/v1/services/15/schedules/available"))
+            .andExpect(status().isUnauthorized())
+            .andExpect(jsonPath("$.errorCode").value("AUTHENTICATION_REQUIRED"));
+
+        verifyNoInteractions(scheduleService);
+    }
+
+    @Test
     void businessConflictUsesSharedErrorContract() throws Exception {
         AuthenticatedSession session = authenticatedSession("proveedor", 42);
         when(scheduleService.createForProvider(any(), any()))

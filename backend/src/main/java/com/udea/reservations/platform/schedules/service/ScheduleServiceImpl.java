@@ -12,6 +12,8 @@ import com.udea.reservations.platform.services.model.ServiceOffering;
 import com.udea.reservations.platform.services.repository.ServiceRepository;
 import java.sql.SQLException;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.Objects;
 import lombok.RequiredArgsConstructor;
@@ -34,7 +36,7 @@ public class ScheduleServiceImpl implements ScheduleService {
         Integer authenticatedUserId,
         ScheduleCreateRequest request
     ) {
-        if (request.fecha().isBefore(LocalDate.now())) {
+        if (request.fecha().isBefore(LocalDate.now(ZoneId.systemDefault()))) {
             throw new ScheduleDateInPastException();
         }
         if (!request.horaFin().isAfter(request.horaInicio())) {
@@ -83,6 +85,23 @@ public class ScheduleServiceImpl implements ScheduleService {
         }
         return scheduleBlockRepository
             .findAllByService_IdOrderByDateAscStartTimeAsc(serviceId)
+            .stream()
+            .map(ScheduleServiceImpl::toResponse)
+            .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<ScheduleResponse> findFutureByServiceId(Integer serviceId) {
+        if (!serviceRepository.existsById(serviceId)) {
+            throw new ServiceNotFoundException();
+        }
+        LocalDateTime now = LocalDateTime.now(ZoneId.systemDefault());
+        return scheduleBlockRepository.findFutureByServiceId(
+                serviceId,
+                now.toLocalDate(),
+                now.toLocalTime()
+            )
             .stream()
             .map(ScheduleServiceImpl::toResponse)
             .toList();

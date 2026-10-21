@@ -129,6 +129,13 @@ public class SecurityConfiguration {
                 .hasAuthority("ROLE_PROVEEDOR")
                 .requestMatchers(HttpMethod.GET, "/api/v1/providers/me/services")
                 .hasAuthority("ROLE_PROVEEDOR")
+                .requestMatchers(
+                    HttpMethod.GET,
+                    "/api/v1/services/available",
+                    "/api/v1/services/*/schedules/available",
+                    "/api/v1/providers",
+                    "/api/v1/providers/*/services"
+                ).authenticated()
                 .requestMatchers(HttpMethod.GET, "/api/v1/services/*/schedules")
                 .authenticated()
                 .anyRequest().authenticated()

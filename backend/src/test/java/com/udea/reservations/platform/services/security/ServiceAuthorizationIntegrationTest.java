@@ -18,6 +18,8 @@ import com.udea.reservations.platform.auth.service.AuthServiceImpl;
 import com.udea.reservations.platform.services.controller.ServiceController;
 import com.udea.reservations.platform.services.dto.ServiceCreateRequest;
 import com.udea.reservations.platform.services.dto.ServiceResponse;
+import com.udea.reservations.platform.services.dto.ServiceAvailabilityResponse;
+import com.udea.reservations.platform.providers.exception.ProviderNotFoundException;
 import com.udea.reservations.platform.services.service.ServiceOfferingService;
 import com.udea.reservations.platform.users.config.PasswordConfig;
 import com.udea.reservations.platform.users.repository.UserRepository;
@@ -230,6 +232,80 @@ class ServiceAuthorizationIntegrationTest {
     @Test
     void anonymousUserCannotReadOwnServices() throws Exception {
         mockMvc.perform(get("/api/v1/providers/me/services"))
+            .andExpect(status().isUnauthorized())
+            .andExpect(jsonPath("$.errorCode").value("AUTHENTICATION_REQUIRED"));
+
+        verifyNoInteractions(service);
+    }
+
+    @Test
+    void authenticatedClientCanDiscoverServicesWithFutureSchedules()
+        throws Exception {
+        AuthenticatedSession session = authenticatedSession("cliente", 42);
+        when(service.findAvailableServices()).thenReturn(List.of(
+            new ServiceAvailabilityResponse(
+                15,
+                "Consulta",
+                45,
+                7,
+                "Café Ana",
+                true
+            )
+        ));
+
+        mockMvc.perform(get("/api/v1/services/available")
+                .session(session.session())
+                .cookie(session.cookie()))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data[0].nombre").value("Consulta"))
+            .andExpect(jsonPath("$.data[0].duracionMinutos").value(45))
+            .andExpect(jsonPath("$.data[0].nombreProveedor").value("Café Ana"))
+            .andExpect(jsonPath("$.data[0].tieneHorariosFuturos").value(true));
+
+        verify(service).findAvailableServices();
+    }
+
+    @Test
+    void authenticatedUserCanReadProviderServicesWithoutFutureSchedules()
+        throws Exception {
+        AuthenticatedSession session = authenticatedSession("cliente", 42);
+        when(service.findActiveServicesByProvider(7)).thenReturn(List.of(
+            new ServiceAvailabilityResponse(
+                15,
+                "Consulta",
+                45,
+                7,
+                "Café Ana",
+                false
+            )
+        ));
+
+        mockMvc.perform(get("/api/v1/providers/7/services")
+                .session(session.session())
+                .cookie(session.cookie()))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data[0].tieneHorariosFuturos").value(false));
+
+        verify(service).findActiveServicesByProvider(7);
+    }
+
+    @Test
+    void unknownProviderReturnsNotFoundInsteadOfEmptyServices()
+        throws Exception {
+        AuthenticatedSession session = authenticatedSession("cliente", 42);
+        when(service.findActiveServicesByProvider(999))
+            .thenThrow(new ProviderNotFoundException());
+
+        mockMvc.perform(get("/api/v1/providers/999/services")
+                .session(session.session())
+                .cookie(session.cookie()))
+            .andExpect(status().isNotFound())
+            .andExpect(jsonPath("$.errorCode").value("PROVIDER_NOT_FOUND"));
+    }
+
+    @Test
+    void anonymousUserCannotDiscoverAvailableServices() throws Exception {
+        mockMvc.perform(get("/api/v1/services/available"))
             .andExpect(status().isUnauthorized())
             .andExpect(jsonPath("$.errorCode").value("AUTHENTICATION_REQUIRED"));
 

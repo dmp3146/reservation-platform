@@ -161,6 +161,33 @@ class ScheduleOverlapPostgresIntegrationTest {
             .isEqualTo(2);
     }
 
+    @Test
+    void postgresFutureScheduleQueryExcludesPastDateBlocks() {
+        ServiceOffering service = serviceRepository.findById(serviceId)
+            .orElseThrow();
+        ScheduleBlock past = new ScheduleBlock();
+        past.setService(service);
+        past.setDate(LocalDate.now().minusDays(1));
+        past.setStartTime(LocalTime.of(9, 0));
+        past.setEndTime(LocalTime.of(10, 0));
+        scheduleBlockRepository.saveAndFlush(past);
+
+        ScheduleBlock future = new ScheduleBlock();
+        future.setService(service);
+        future.setDate(LocalDate.now().plusDays(10));
+        future.setStartTime(LocalTime.of(9, 0));
+        future.setEndTime(LocalTime.of(10, 0));
+        Integer futureId = scheduleBlockRepository.saveAndFlush(future).getId();
+
+        var futureBlocks = scheduleBlockRepository.findFutureByServiceId(
+            serviceId,
+            LocalDate.now(),
+            LocalTime.now()
+        );
+        assertThat(futureBlocks).hasSize(1);
+        assertThat(futureBlocks.get(0).getId()).isEqualTo(futureId);
+    }
+
     private boolean insertConcurrently(
         CountDownLatch ready,
         CountDownLatch start
@@ -179,7 +206,7 @@ class ScheduleOverlapPostgresIntegrationTest {
         try {
             scheduleBlockRepository.saveAndFlush(block);
             return true;
-        } catch (DataIntegrityViolationException exception) {
+        } catch (DataIntegrityViolationException _) {
             return false;
         }
     }

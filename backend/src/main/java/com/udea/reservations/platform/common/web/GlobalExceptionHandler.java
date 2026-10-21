@@ -2,8 +2,10 @@ package com.udea.reservations.platform.common.web;
 
 import com.udea.reservations.platform.common.dto.ApiErrorResponse;
 import com.udea.reservations.platform.common.exception.BusinessRuleException;
+import jakarta.validation.ConstraintViolationException;
 import java.util.List;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.TypeMismatchException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -16,6 +18,8 @@ import org.springframework.web.servlet.resource.NoResourceFoundException;
 @Slf4j
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+
+    private static final String VALIDATION_ERROR = "VALIDATION_ERROR";
 
     @ExceptionHandler(BusinessRuleException.class)
     public ResponseEntity<ApiErrorResponse> handleBusinessRule(BusinessRuleException ex) {
@@ -30,8 +34,38 @@ public class GlobalExceptionHandler {
             .map(error -> error.getField() + " " + error.getDefaultMessage())
             .toList();
         ApiErrorResponse body = ApiErrorResponse.of(
-            "VALIDATION_ERROR", "Hay campos obligatorios o inválidos.", details);
+            VALIDATION_ERROR, "Hay campos obligatorios o inválidos.", details);
         log.warn("Validation failed: traceId={}", body.traceId());
+        return ResponseEntity.badRequest().body(body);
+    }
+
+    @ExceptionHandler(ConstraintViolationException.class)
+    public ResponseEntity<ApiErrorResponse> handleConstraintViolation(
+        ConstraintViolationException ex
+    ) {
+        List<String> details = ex.getConstraintViolations().stream()
+            .map(violation -> violation.getPropertyPath() + " "
+                + violation.getMessage())
+            .toList();
+        ApiErrorResponse body = ApiErrorResponse.of(
+            VALIDATION_ERROR,
+            "Hay parámetros de solicitud inválidos.",
+            details
+        );
+        log.warn("Request parameter validation failed: traceId={}", body.traceId());
+        return ResponseEntity.badRequest().body(body);
+    }
+
+    @ExceptionHandler(TypeMismatchException.class)
+    public ResponseEntity<ApiErrorResponse> handleTypeMismatch(
+        TypeMismatchException ex
+    ) {
+        ApiErrorResponse body = ApiErrorResponse.of(
+            VALIDATION_ERROR,
+            "Uno o más parámetros de la solicitud tienen un formato inválido.",
+            List.of()
+        );
+        log.warn("Request parameter format invalid: traceId={}", body.traceId());
         return ResponseEntity.badRequest().body(body);
     }
 

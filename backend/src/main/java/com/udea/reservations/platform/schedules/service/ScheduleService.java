@@ -12,4 +12,6 @@ public interface ScheduleService {
     );
 
     List<ScheduleResponse> findByServiceId(Integer serviceId);
+
+    List<ScheduleResponse> findFutureByServiceId(Integer serviceId);
 }
