@@ -4,5 +4,6 @@ public record ServiceResponse(
     Integer id,
     String nombre,
     String descripcion,
-    Integer duracionMinutos
+    Integer duracionMinutos,
+    Boolean activo
 ) {}
