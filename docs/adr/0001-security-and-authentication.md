@@ -1,56 +1,63 @@
 # ADR-0001: Seguridad y autenticación
 
-- **Estado:** propuesta
-- **Fecha:** 2026-10-20
+- **Estado:** aceptada
+- **Fecha:** 2026-10-21
 - **Responsable:** Pendiente de asignación
 
 ## Contexto
 
-**Hechos comprobados**
+El backend ya implementa autenticación mediante sesiones HTTP de Spring
+Security. El inicio de sesión verifica las credenciales con un
+`AuthenticationManager` y carga al usuario desde PostgreSQL mediante
+`DatabaseUserDetailsService`. El `SecurityContext` se persiste en sesión y
+`UserPrincipal` proporciona la identidad autenticada a los controladores.
 
-- El código inspeccionado no contiene configuración de Spring Security, flujo de autenticación, autorización, `PasswordEncoder` ni implementación BCrypt.
-- `backend/src/main/resources/db/schema.sql` define `usuario.password_hash`, pero no se encontró código de negocio que registre usuarios o codifique/verifique contraseñas.
-- `.github/copilot-instructions.md` y `docs/architecture/conventions.md` mencionan BCrypt mediante `PasswordEncoder`, mensajes de login genéricos y la prohibición de registrar contraseñas o tokens. Estas son instrucciones documentadas; por sí solas no prueban que la seguridad esté implementada ni que esas decisiones hayan sido aprobadas formalmente.
-- El proyecto usa Java 25 y Spring Boot 4.1.1 según `backend/pom.xml`. No se encontró un mecanismo de identidad que permita decidir entre sesiones, cookies o tokens.
+Las operaciones mutables conservan protección CSRF. La cookie de sesión se
+configura como HttpOnly, Secure y SameSite=Lax. Las respuestas de seguridad
+usan el formato estándar de error de la API.
 
-El problema que debe resolverse antes de incorporar autenticación es definir cómo se verifican las credenciales, cómo se representa la identidad autenticada y cómo se autorizan las operaciones protegidas. Crear un codificador aislado no implementa registro, autenticación, autorización, almacenamiento seguro ni persistencia.
+No hay un mecanismo de identidad de producción basado en `X-User-Id`, un
+`HandlerInterceptor` de identidad ni una anotación `@RequiresRole`. El
+encabezado `X-User-Id` aparece en pruebas para comprobar que no permite
+suplantar la identidad autenticada. Los permisos se aplican mediante
+autoridades de Spring Security.
 
-## Alternativas consideradas
+Los roles persistidos son `cliente`, `proveedor` y `responsable`.
+`UserPrincipal` los convierte en `ROLE_CLIENTE`, `ROLE_PROVEEDOR` y
+`ROLE_RESPONSABLE`. Además, las cuentas `responsable` reciben
+`ROLE_MANAGER` para autorizar los reportes.
 
-Estas alternativas se comparan para esta propuesta; no se afirma que hayan sido evaluadas previamente por el equipo.
-
-1. **Adoptar BCrypt con `PasswordEncoder` al implementar un flujo real de registro/autenticación.** La dependencia y las pruebas se incorporan junto con su consumidor y reglas de negocio. Evita mantener configuración sin uso y permite probar el ciclo completo.
-2. **Agregar ahora un bean BCrypt preparatorio.** Hace disponible una herramienta antes de existir un flujo que la use, pero agrega una dependencia y configuración inactiva, y no protege por sí sola ningún dato.
-3. **Elegir otro mecanismo de autenticación o hash.** No se recomienda ni descarta aquí: requiere requisitos de seguridad, plataforma y operación que aún no están documentados.
+JWT no está implementado. Adoptarlo reemplazaría o ampliaría el contrato de
+autenticación, afectaría al login, a los clientes y a la protección CSRF, y
+requeriría soporte criptográfico específico. No se debe deducir su adopción
+del diseño original de identidad interina.
 
 ## Decisión
 
-**Decisión propuesta, pendiente de aprobación:** posponer la incorporación de BCrypt y de cualquier mecanismo de autenticación hasta que una historia de usuario defina el registro o login y su contexto de seguridad. En esa historia se debe evaluar `PasswordEncoder` con BCrypt como opción de almacenamiento y verificación de contraseñas, y añadir solo la dependencia necesaria; no incorporar `spring-boot-starter-security` salvo que también se aprueben requisitos de filtros, autorización, sesiones, tokens u otras capacidades de seguridad.
-
-Esta propuesta no selecciona sesiones, cookies, JWT, roles ni estrategia de autorización. Tampoco autoriza cambios a dependencias o configuración.
+- Mantener la autenticación por sesión HTTP y la protección CSRF existentes.
+- Obtener la identidad exclusivamente del `UserPrincipal` autenticado; no
+  aceptar `X-User-Id` como fuente de identidad.
+- No introducir JWT ni un segundo mecanismo de autenticación en paralelo hasta
+  que se apruebe explícitamente un nuevo contrato y su estrategia de transición.
+- Considerar sustituida la tarea de identidad interina con `X-User-Id`: la
+  autenticación de sesión ya cubre ese propósito de forma más segura y está
+  integrada con la autorización existente.
 
 ## Consecuencias
 
-- Positivas:
-  - La seguridad se implementa en conjunto con el flujo funcional que la necesita.
-  - Se pueden probar registro, verificación de contraseña y respuestas de autenticación sin asumir un consumidor inexistente.
-  - Se evita presentar un bean PasswordEncoder como si resolviera autenticación o autorización.
-- Negativas / riesgos:
-  - Hasta que se apruebe e implemente el flujo, no existe autenticación ni protección de endpoints en el backend inspeccionado.
-  - La columna `password_hash` existe en el esquema, pero el código actual no demuestra cómo se poblará o validará.
-- Impacto en calidad, seguridad, pruebas y despliegue:
-  - La futura implementación deberá probar que solo se persisten hashes, que la contraseña original puede verificarse y que una incorrecta se rechaza, sin exponer contraseñas ni hashes en respuestas o logs.
-  - La codificación de contraseñas no sustituye autorización, control de acceso, protección CSRF, gestión de sesiones/tokens ni políticas de RLS.
-  - La versión de cualquier dependencia nueva debe resolverse desde Spring Boot 4.1.1 salvo justificación y aprobación distintas.
+- Los endpoints protegidos conservan las reglas de autorización por autoridad.
+- Las pruebas de seguridad deben verificar que la sesión autenticada es la
+  fuente de identidad y que una cabecera manipulada no concede acceso.
+- Cualquier adopción futura de JWT deberá especificar la emisión del token, su
+  formato de transporte, firma, expiración, claims, claves de configuración,
+  tratamiento de CSRF y transición de clientes; no deberá confiar en claims no
+  validados ni mantener mecanismos alternativos accidentalmente.
+- La configuración local describe RLS en el esquema, pero no confirma las
+  políticas, grants ni el rol de conexión de una base remota. Esta decisión no
+  modifica ni verifica la configuración de Supabase.
 
 ## Trazabilidad
 
-HU relacionadas: Pendiente de definir.
-
-## Pendientes de aprobación
-
-- Mecanismo de autenticación y fuente de identidad.
-- Modelo de autorización, roles y reglas de acceso.
-- Política de contraseñas, recuperación y bloqueo/rate limiting, si aplica.
-- Momento de incorporación de BCrypt y dependencia asociada.
-- Responsabilidad del backend frente a RLS y propagación de identidad a PostgreSQL, si aplica.
+- HU 6: inicio de sesión con sesión HTTP.
+- T1 de identidad interina: sustituida por la autenticación existente.
+- T2 de JWT: diferida; requiere una decisión de contrato posterior.
