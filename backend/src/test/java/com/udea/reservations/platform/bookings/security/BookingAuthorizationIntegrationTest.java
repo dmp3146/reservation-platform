@@ -6,6 +6,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -19,6 +20,7 @@ import com.udea.reservations.platform.auth.service.AuthServiceImpl;
 import com.udea.reservations.platform.bookings.controller.BookingController;
 import com.udea.reservations.platform.bookings.dto.BookingCreateRequest;
 import com.udea.reservations.platform.bookings.dto.BookingResponse;
+import com.udea.reservations.platform.bookings.exception.BookingAlreadyCancelledException;
 import com.udea.reservations.platform.bookings.service.BookingService;
 import com.udea.reservations.platform.common.web.GlobalExceptionHandler;
 import com.udea.reservations.platform.users.config.PasswordConfig;
@@ -57,6 +59,8 @@ class BookingAuthorizationIntegrationTest {
     private static final String BOOKING_PATH = "/api/v1/bookings";
     private static final String ACTIVE_BOOKINGS_PATH =
         "/api/v1/bookings/active";
+    private static final String CANCEL_BOOKING_PATH =
+        "/api/v1/bookings/{bookingId}/cancel";
 
     @Autowired
     private MockMvc mockMvc;
@@ -150,6 +154,50 @@ class BookingAuthorizationIntegrationTest {
     }
 
     @Test
+    void clientCanCancelBookingAndIdentityComesFromSession() throws Exception {
+        when(bookingService.cancel(42, 55)).thenReturn(new BookingResponse(
+            55,
+            15,
+            "Consulta",
+            "Café Central",
+            LocalDate.of(2030, 1, 2),
+            LocalTime.of(9, 30),
+            LocalTime.of(10, 0),
+            "cancelada"
+        ));
+        AuthenticatedSession session = authenticatedSession("cliente", 42);
+
+        mockMvc.perform(patch(CANCEL_BOOKING_PATH, 55)
+                .session(session.session())
+                .cookie(session.cookie())
+                .header("X-CSRF-TOKEN", session.csrfToken())
+                .header("X-User-Id", "999"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.bookingId").value(55))
+            .andExpect(jsonPath("$.data.status").value("cancelada"))
+            .andExpect(jsonPath("$.data.serviceName").value("Consulta"));
+
+        verify(bookingService).cancel(42, 55);
+    }
+
+    @Test
+    void cancellingAlreadyCancelledBookingUsesStandardConflictResponse()
+        throws Exception {
+        when(bookingService.cancel(42, 55))
+            .thenThrow(new BookingAlreadyCancelledException());
+        AuthenticatedSession session = authenticatedSession("cliente", 42);
+
+        mockMvc.perform(patch(CANCEL_BOOKING_PATH, 55)
+                .session(session.session())
+                .cookie(session.cookie())
+                .header("X-CSRF-TOKEN", session.csrfToken()))
+            .andExpect(status().isConflict())
+            .andExpect(jsonPath("$.errorCode").value("BOOKING_ALREADY_CANCELLED"))
+            .andExpect(jsonPath("$.details").isArray())
+            .andExpect(jsonPath("$.traceId").isNotEmpty());
+    }
+
+    @Test
     void clientWithNoActiveBookingsReceivesAnEmptyCollection() throws Exception {
         when(bookingService.findActiveForCustomer(42)).thenReturn(List.of());
         AuthenticatedSession session = authenticatedSession("cliente", 42);
@@ -171,6 +219,14 @@ class BookingAuthorizationIntegrationTest {
         mockMvc.perform(get(ACTIVE_BOOKINGS_PATH)
                 .session(session.session())
                 .cookie(session.cookie()))
+            .andExpect(status().isUnauthorized())
+            .andExpect(jsonPath("$.errorCode").value("AUTHENTICATION_REQUIRED"))
+            .andExpect(jsonPath("$.traceId").isNotEmpty());
+
+        mockMvc.perform(patch(CANCEL_BOOKING_PATH, 55)
+                .session(session.session())
+                .cookie(session.cookie())
+                .header("X-CSRF-TOKEN", session.token()))
             .andExpect(status().isUnauthorized())
             .andExpect(jsonPath("$.errorCode").value("AUTHENTICATION_REQUIRED"))
             .andExpect(jsonPath("$.traceId").isNotEmpty());
@@ -203,6 +259,15 @@ class BookingAuthorizationIntegrationTest {
                 .andExpect(jsonPath("$.errorCode").value("ACCESS_DENIED"))
                 .andExpect(jsonPath("$.traceId").isNotEmpty());
 
+            mockMvc.perform(patch(CANCEL_BOOKING_PATH, 55)
+                    .session(session.session())
+                    .cookie(session.cookie())
+                    .header("X-CSRF-TOKEN", session.csrfToken())
+                    .header("X-User-Id", "999"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.errorCode").value("ACCESS_DENIED"))
+                .andExpect(jsonPath("$.traceId").isNotEmpty());
+
             mockMvc.perform(get(ACTIVE_BOOKINGS_PATH)
                     .session(session.session())
                     .cookie(session.cookie())
@@ -224,6 +289,13 @@ class BookingAuthorizationIntegrationTest {
                 .cookie(session.cookie())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(validBody()))
+            .andExpect(status().isForbidden())
+            .andExpect(jsonPath("$.errorCode").value("CSRF_INVALID"))
+            .andExpect(jsonPath("$.traceId").isNotEmpty());
+
+        mockMvc.perform(patch(CANCEL_BOOKING_PATH, 55)
+                .session(session.session())
+                .cookie(session.cookie()))
             .andExpect(status().isForbidden())
             .andExpect(jsonPath("$.errorCode").value("CSRF_INVALID"))
             .andExpect(jsonPath("$.traceId").isNotEmpty());

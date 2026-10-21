@@ -10,8 +10,11 @@ import static org.mockito.Mockito.when;
 
 import com.udea.reservations.platform.bookings.dto.BookingCreateRequest;
 import com.udea.reservations.platform.bookings.dto.BookingResponse;
+import com.udea.reservations.platform.bookings.exception.BookingAlreadyCancelledException;
 import com.udea.reservations.platform.bookings.exception.BookingConflictException;
+import com.udea.reservations.platform.bookings.exception.BookingCompletedCannotBeCancelledException;
 import com.udea.reservations.platform.bookings.exception.BookingDateTimeInPastException;
+import com.udea.reservations.platform.bookings.exception.BookingNotFoundException;
 import com.udea.reservations.platform.bookings.exception.BookingScheduleNotFoundException;
 import com.udea.reservations.platform.bookings.model.Booking;
 import com.udea.reservations.platform.bookings.repository.BookingRepository;
@@ -204,5 +207,91 @@ class BookingServiceImplTest {
         )).isInstanceOf(BookingScheduleNotFoundException.class);
 
         verify(bookingRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void cancelsOwnedActiveBookingAndPersistsTheStatusChange() {
+        Booking booking = booking("activa", user);
+        when(bookingRepository.findByIdForUpdate(55))
+            .thenReturn(Optional.of(booking));
+        when(bookingRepository.saveAndFlush(booking)).thenReturn(booking);
+
+        BookingResponse response = bookingService.cancel(USER_ID, 55);
+
+        assertThat(booking.getStatus()).isEqualTo("cancelada");
+        assertThat(response).isEqualTo(new BookingResponse(
+            55,
+            15,
+            "Consulta",
+            "Café Central",
+            BOOKING_DATE,
+            LocalTime.of(9, 30),
+            LocalTime.of(10, 0),
+            "cancelada"
+        ));
+        verify(bookingRepository).saveAndFlush(booking);
+    }
+
+    @Test
+    void rejectsCancellingAlreadyCancelledBookingWithoutSavingAgain() {
+        Booking booking = booking("cancelada", user);
+        when(bookingRepository.findByIdForUpdate(55))
+            .thenReturn(Optional.of(booking));
+
+        assertThatThrownBy(() -> bookingService.cancel(USER_ID, 55))
+            .isInstanceOf(BookingAlreadyCancelledException.class);
+
+        verify(bookingRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void rejectsCancellingCompletedBookingWithoutChangingItsState() {
+        Booking booking = booking("completada", user);
+        when(bookingRepository.findByIdForUpdate(55))
+            .thenReturn(Optional.of(booking));
+
+        assertThatThrownBy(() -> bookingService.cancel(USER_ID, 55))
+            .isInstanceOf(BookingCompletedCannotBeCancelledException.class);
+
+        assertThat(booking.getStatus()).isEqualTo("completada");
+        verify(bookingRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void hidesBookingOwnedByAnotherCustomer() {
+        User anotherCustomer = new User();
+        anotherCustomer.setId(84);
+        Booking booking = booking("activa", anotherCustomer);
+        when(bookingRepository.findByIdForUpdate(55))
+            .thenReturn(Optional.of(booking));
+
+        assertThatThrownBy(() -> bookingService.cancel(USER_ID, 55))
+            .isInstanceOf(BookingNotFoundException.class);
+
+        assertThat(booking.getStatus()).isEqualTo("activa");
+        verify(bookingRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void reportsMissingBookingWithoutSaving() {
+        when(bookingRepository.findByIdForUpdate(55))
+            .thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> bookingService.cancel(USER_ID, 55))
+            .isInstanceOf(BookingNotFoundException.class);
+
+        verify(bookingRepository, never()).saveAndFlush(any());
+    }
+
+    private Booking booking(String status, User bookingUser) {
+        Booking booking = new Booking();
+        booking.setId(55);
+        booking.setUser(bookingUser);
+        booking.setScheduleBlock(scheduleBlock);
+        booking.setDate(BOOKING_DATE);
+        booking.setStartTime(LocalTime.of(9, 30));
+        booking.setEndTime(LocalTime.of(10, 0));
+        booking.setStatus(status);
+        return booking;
     }
 }
