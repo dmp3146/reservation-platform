@@ -52,6 +52,34 @@ class UserServiceImplTest {
     }
 
     @Test
+    void registerProviderAccountStoresProviderRoleUsingSharedRegistrationLogic() {
+        RepositoryProbe repository = new RepositoryProbe();
+        PasswordEncoderProbe passwordEncoder = new PasswordEncoderProbe();
+        UserServiceImpl userService = new UserServiceImpl(
+            repository.createRepository(),
+            passwordEncoder
+        );
+
+        User user = userService.registerProviderAccount(
+            validRequest(
+                "Ana Pérez",
+                " ANA@EXAMPLE.COM ",
+                "clave-segura-1",
+                "clave-segura-1"
+            )
+        );
+
+        assertThat(user).isSameAs(repository.savedUser);
+        assertThat(user.getEmail()).isEqualTo("ana@example.com");
+        assertThat(user.getRole()).isEqualTo("proveedor");
+        assertThat(passwordEncoder.matches(
+            "clave-segura-1",
+            user.getPasswordHash()
+        )).isTrue();
+        assertThat(passwordEncoder.encodeCalls).isEqualTo(1);
+    }
+
+    @Test
     void registerRejectsExistingEmailBeforeEncodingOrSaving() {
         RepositoryProbe repository = new RepositoryProbe();
         repository.existingEmail = "ana@example.com";

@@ -19,6 +19,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class UserServiceImpl implements UserService {
 
     private static final String CLIENT_ROLE = "cliente";
+    private static final String PROVIDER_ROLE = "proveedor";
     private static final String EMAIL_UNIQUE_CONSTRAINT = "usuario_email_key";
 
     private final UserRepository userRepository;
@@ -27,6 +28,22 @@ public class UserServiceImpl implements UserService {
     @Override
     @Transactional
     public UserResponse register(UserRegistrationRequest registrationRequest) {
+        User user = createAccount(registrationRequest, CLIENT_ROLE);
+        return toUserResponse(user);
+    }
+
+    @Override
+    @Transactional
+    public User registerProviderAccount(
+        UserRegistrationRequest registrationRequest
+    ) {
+        return createAccount(registrationRequest, PROVIDER_ROLE);
+    }
+
+    private User createAccount(
+        UserRegistrationRequest registrationRequest,
+        String role
+    ) {
         if (
             !registrationRequest.password().equals(
                 registrationRequest.confirmPassword()
@@ -48,22 +65,25 @@ public class UserServiceImpl implements UserService {
         user.setPasswordHash(
             passwordEncoder.encode(registrationRequest.password())
         );
-        user.setRole(CLIENT_ROLE);
+        user.setRole(role);
 
         try {
-            User savedUser = userRepository.saveAndFlush(user);
-            return new UserResponse(
-                savedUser.getId(),
-                savedUser.getName(),
-                savedUser.getEmail(),
-                savedUser.getRole()
-            );
+            return userRepository.saveAndFlush(user);
         } catch (DataIntegrityViolationException exception) {
             if (isEmailUniqueViolation(exception)) {
                 throw new EmailAlreadyRegisteredException();
             }
             throw exception;
         }
+    }
+
+    private static UserResponse toUserResponse(User user) {
+        return new UserResponse(
+            user.getId(),
+            user.getName(),
+            user.getEmail(),
+            user.getRole()
+        );
     }
 
     private static boolean isEmailUniqueViolation(
