@@ -22,6 +22,7 @@ import com.udea.reservations.platform.providers.model.Provider;
 import com.udea.reservations.platform.schedules.model.ScheduleBlock;
 import com.udea.reservations.platform.schedules.repository.ScheduleBlockRepository;
 import com.udea.reservations.platform.services.model.ServiceOffering;
+import com.udea.reservations.platform.services.repository.ServiceRepository;
 import com.udea.reservations.platform.users.model.User;
 import com.udea.reservations.platform.users.repository.UserRepository;
 import java.time.Clock;
@@ -51,6 +52,9 @@ class BookingServiceImplTest {
     private ScheduleBlockRepository scheduleBlockRepository;
 
     @Mock
+    private ServiceRepository serviceRepository;
+
+    @Mock
     private UserRepository userRepository;
 
     private BookingServiceImpl bookingService;
@@ -63,6 +67,7 @@ class BookingServiceImplTest {
         bookingService = new BookingServiceImpl(
             bookingRepository,
             scheduleBlockRepository,
+            serviceRepository,
             userRepository,
             Clock.fixed(
                 Instant.parse("2030-01-01T08:00:00Z"),
@@ -92,6 +97,10 @@ class BookingServiceImplTest {
         scheduleBlock.setEndTime(LocalTime.of(12, 0));
         lenient().when(scheduleBlockRepository.findByIdForUpdate(BLOCK_ID))
             .thenReturn(Optional.of(scheduleBlock));
+        lenient().when(scheduleBlockRepository.findServiceIdById(BLOCK_ID))
+            .thenReturn(Optional.of(service.getId()));
+        lenient().when(serviceRepository.findByIdForUpdate(service.getId()))
+            .thenReturn(Optional.of(service));
     }
 
     @Test

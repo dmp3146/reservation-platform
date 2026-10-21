@@ -14,6 +14,7 @@ import com.udea.reservations.platform.bookings.repository.BookingRepository;
 import com.udea.reservations.platform.schedules.model.ScheduleBlock;
 import com.udea.reservations.platform.schedules.repository.ScheduleBlockRepository;
 import com.udea.reservations.platform.services.model.ServiceOffering;
+import com.udea.reservations.platform.services.repository.ServiceRepository;
 import com.udea.reservations.platform.users.model.User;
 import com.udea.reservations.platform.users.repository.UserRepository;
 import java.sql.SQLException;
@@ -39,6 +40,7 @@ public class BookingServiceImpl implements BookingService {
 
     private final BookingRepository bookingRepository;
     private final ScheduleBlockRepository scheduleBlockRepository;
+    private final ServiceRepository serviceRepository;
     private final UserRepository userRepository;
     private final Clock bookingClock;
 
@@ -48,10 +50,14 @@ public class BookingServiceImpl implements BookingService {
         Integer authenticatedUserId,
         BookingCreateRequest request
     ) {
+        Integer serviceId = scheduleBlockRepository
+            .findServiceIdById(request.scheduleBlockId())
+            .orElseThrow(BookingScheduleNotFoundException::new);
+        ServiceOffering service = serviceRepository.findByIdForUpdate(serviceId)
+            .orElseThrow(BookingScheduleNotFoundException::new);
         ScheduleBlock block = scheduleBlockRepository
             .findByIdForUpdate(request.scheduleBlockId())
             .orElseThrow(BookingScheduleNotFoundException::new);
-        ServiceOffering service = block.getService();
 
         if (!Boolean.TRUE.equals(service.getActive())) {
             throw new BookingConflictException();

@@ -4,6 +4,8 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.doThrow;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -15,10 +17,12 @@ import com.udea.reservations.platform.auth.security.SecurityErrorResponseWriter;
 import com.udea.reservations.platform.auth.security.UserPrincipal;
 import com.udea.reservations.platform.auth.controller.AuthController;
 import com.udea.reservations.platform.auth.service.AuthServiceImpl;
+import com.udea.reservations.platform.common.web.GlobalExceptionHandler;
 import com.udea.reservations.platform.services.controller.ServiceController;
 import com.udea.reservations.platform.services.dto.ServiceCreateRequest;
 import com.udea.reservations.platform.services.dto.ServiceResponse;
 import com.udea.reservations.platform.services.dto.ServiceAvailabilityResponse;
+import com.udea.reservations.platform.services.exception.ServiceHasActiveBookingsException;
 import com.udea.reservations.platform.providers.exception.ProviderNotFoundException;
 import com.udea.reservations.platform.services.service.ServiceOfferingService;
 import com.udea.reservations.platform.users.config.PasswordConfig;
@@ -48,11 +52,13 @@ import tools.jackson.databind.ObjectMapper;
     SecurityErrorResponseWriter.class,
     DatabaseUserDetailsService.class,
     AuthServiceImpl.class,
-    PasswordConfig.class
+    PasswordConfig.class,
+    GlobalExceptionHandler.class
 })
 class ServiceAuthorizationIntegrationTest {
 
     private static final String CREATE_PATH = "/api/v1/services";
+    private static final String DELETE_PATH = "/api/v1/services/{serviceId}";
 
     @Autowired
     private MockMvc mockMvc;
@@ -102,6 +108,44 @@ class ServiceAuthorizationIntegrationTest {
     }
 
     @Test
+    void providerCanRetireServiceUsingIdentityFromSession() throws Exception {
+        AuthenticatedSession session = authenticatedSession("proveedor", 42);
+
+        mockMvc.perform(delete(DELETE_PATH, 15)
+                .session(session.session())
+                .cookie(session.cookie())
+                .header("X-CSRF-TOKEN", session.csrfToken())
+                .header("X-User-Id", "999"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.message").value(
+                "Servicio retirado de la oferta exitosamente."
+            ))
+            .andExpect(jsonPath("$.data").doesNotExist());
+
+        verify(service).deleteForProvider(42, 15);
+    }
+
+    @Test
+    void activeBookingRetirementConflictUsesStandardErrorResponse()
+        throws Exception {
+        doThrow(new ServiceHasActiveBookingsException())
+            .when(service).deleteForProvider(42, 15);
+        AuthenticatedSession session = authenticatedSession("proveedor", 42);
+
+        mockMvc.perform(delete(DELETE_PATH, 15)
+                .session(session.session())
+                .cookie(session.cookie())
+                .header("X-CSRF-TOKEN", session.csrfToken()))
+            .andExpect(status().isConflict())
+            .andExpect(jsonPath("$.errorCode").value(
+                "SERVICE_HAS_ACTIVE_BOOKINGS"
+            ))
+            .andExpect(jsonPath("$.traceId").isNotEmpty());
+
+        verify(service).deleteForProvider(42, 15);
+    }
+
+    @Test
     void anonymousRequestWithValidCsrfReturnsAuthenticationRequired()
         throws Exception {
         CsrfSession csrf = csrfSession();
@@ -112,6 +156,14 @@ class ServiceAuthorizationIntegrationTest {
                 .header("X-CSRF-TOKEN", csrf.token())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(validBody()))
+            .andExpect(status().isUnauthorized())
+            .andExpect(jsonPath("$.errorCode").value("AUTHENTICATION_REQUIRED"))
+            .andExpect(jsonPath("$.traceId").isNotEmpty());
+
+        mockMvc.perform(delete(DELETE_PATH, 15)
+                .session(csrf.session())
+                .cookie(csrf.cookie())
+                .header("X-CSRF-TOKEN", csrf.token()))
             .andExpect(status().isUnauthorized())
             .andExpect(jsonPath("$.errorCode").value("AUTHENTICATION_REQUIRED"))
             .andExpect(jsonPath("$.traceId").isNotEmpty());
@@ -133,6 +185,14 @@ class ServiceAuthorizationIntegrationTest {
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.errorCode").value("ACCESS_DENIED"))
                 .andExpect(jsonPath("$.traceId").isNotEmpty());
+
+            mockMvc.perform(delete(DELETE_PATH, 15)
+                    .session(session.session())
+                    .cookie(session.cookie())
+                    .header("X-CSRF-TOKEN", session.csrfToken()))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.errorCode").value("ACCESS_DENIED"))
+                .andExpect(jsonPath("$.traceId").isNotEmpty());
         }
         verifyNoInteractions(service);
     }
@@ -146,6 +206,13 @@ class ServiceAuthorizationIntegrationTest {
                 .cookie(session.cookie())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(validBody()))
+            .andExpect(status().isForbidden())
+            .andExpect(jsonPath("$.errorCode").value("CSRF_INVALID"))
+            .andExpect(jsonPath("$.traceId").isNotEmpty());
+
+        mockMvc.perform(delete(DELETE_PATH, 15)
+                .session(session.session())
+                .cookie(session.cookie()))
             .andExpect(status().isForbidden())
             .andExpect(jsonPath("$.errorCode").value("CSRF_INVALID"))
             .andExpect(jsonPath("$.traceId").isNotEmpty());

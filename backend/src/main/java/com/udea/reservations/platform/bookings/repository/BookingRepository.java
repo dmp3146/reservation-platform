@@ -34,6 +34,11 @@ public interface BookingRepository extends JpaRepository<Booking, Integer> {
         @Param("status") String status
     );
 
+    boolean existsByScheduleBlock_Service_IdAndStatus(
+        Integer serviceId,
+        String status
+    );
+
     @Query("""
         select booking
         from Booking booking

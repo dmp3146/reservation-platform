@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -58,6 +59,7 @@ class ScheduleServiceImplTest {
         ownedService = new ServiceOffering();
         ownedService.setId(15);
         ownedService.setProvider(provider);
+        ownedService.setActive(true);
         lenient().when(serviceRepository.findByIdForUpdate(15))
             .thenReturn(Optional.of(ownedService));
     }
@@ -96,6 +98,22 @@ class ScheduleServiceImplTest {
     }
 
     @Test
+    void rejectsNewScheduleForInactiveService() {
+        ownedService.setActive(false);
+        ScheduleCreateRequest request = request(
+            15,
+            LocalDate.now().plusDays(1),
+            LocalTime.of(9, 0),
+            LocalTime.of(10, 0)
+        );
+
+        assertThatThrownBy(() -> scheduleService.createForProvider(42, request))
+            .isInstanceOf(ServiceNotFoundException.class);
+
+        verify(scheduleBlockRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
     void acceptsAdjacentBlocks() {
         LocalDate date = LocalDate.now();
         ScheduleCreateRequest first = request(
@@ -122,8 +140,7 @@ class ScheduleServiceImplTest {
         scheduleService.createForProvider(42, first);
         scheduleService.createForProvider(42, adjacent);
 
-        verify(scheduleBlockRepository, org.mockito.Mockito.times(2))
-            .saveAndFlush(any());
+        verify(scheduleBlockRepository, times(2)).saveAndFlush(any());
     }
 
     @Test
@@ -200,15 +217,14 @@ class ScheduleServiceImplTest {
 
     @Test
     void rejectsServiceOwnedByAnotherProviderWithoutRevealingIt() {
-        assertThatThrownBy(() -> scheduleService.createForProvider(
-            99,
-            request(
-                15,
-                LocalDate.now().plusDays(1),
-                LocalTime.of(9, 0),
-                LocalTime.of(10, 0)
-            )
-        ))
+        ScheduleCreateRequest request = request(
+            15,
+            LocalDate.now().plusDays(1),
+            LocalTime.of(9, 0),
+            LocalTime.of(10, 0)
+        );
+
+        assertThatThrownBy(() -> scheduleService.createForProvider(99, request))
             .isInstanceOf(ServiceNotFoundException.class);
 
         verify(scheduleBlockRepository, never()).saveAndFlush(any());

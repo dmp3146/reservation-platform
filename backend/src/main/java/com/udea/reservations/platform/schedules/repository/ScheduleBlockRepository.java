@@ -19,6 +19,13 @@ public interface ScheduleBlockRepository
     Optional<ScheduleBlock> findByIdForUpdate(@Param("id") Integer id);
 
     @Query("""
+        select block.service.id
+        from ScheduleBlock block
+        where block.id = :id
+        """)
+    Optional<Integer> findServiceIdById(@Param("id") Integer id);
+
+    @Query("""
         select count(block)
         from ScheduleBlock block
         where block.service.id = :serviceId
