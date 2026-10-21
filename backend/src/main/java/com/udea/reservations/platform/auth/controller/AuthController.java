@@ -6,11 +6,14 @@ import com.udea.reservations.platform.auth.dto.LoginResponse;
 import com.udea.reservations.platform.auth.security.UserPrincipal;
 import com.udea.reservations.platform.auth.service.AuthService;
 import com.udea.reservations.platform.common.dto.ApiSuccessResponse;
+import com.udea.reservations.platform.common.exception.BusinessRuleException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
+import java.util.Optional;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.web.context.SecurityContextRepository;
@@ -46,6 +49,27 @@ public class AuthController {
             csrfToken.getToken(),
             csrfToken.getHeaderName(),
             csrfToken.getParameterName()
+        ));
+    }
+
+    @GetMapping("/me")
+    public ResponseEntity<ApiSuccessResponse<LoginResponse>> currentUser(
+        @AuthenticationPrincipal UserPrincipal principal
+    ) {
+        UserPrincipal authenticatedPrincipal = Optional.ofNullable(principal)
+            .orElseThrow(() -> new BusinessRuleException(
+                "AUTHENTICATION_REQUIRED",
+                "Debes iniciar sesión para consultar tu perfil.",
+                401
+            ));
+        return ResponseEntity.ok(new ApiSuccessResponse<>(
+            "Sesión consultada exitosamente.",
+            new LoginResponse(
+                authenticatedPrincipal.id(),
+                authenticatedPrincipal.name(),
+                authenticatedPrincipal.email(),
+                authenticatedPrincipal.role()
+            )
         ));
     }
 
