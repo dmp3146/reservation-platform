@@ -123,6 +123,8 @@ public class SecurityConfiguration {
                     "/api/v1/users",
                     "/api/v1/providers"
                 ).permitAll()
+                .requestMatchers(HttpMethod.POST, "/api/v1/services")
+                .hasAuthority("ROLE_PROVEEDOR")
                 .anyRequest().authenticated()
             )
             .formLogin(form -> form.disable())

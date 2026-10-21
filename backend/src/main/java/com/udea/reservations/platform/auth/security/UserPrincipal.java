@@ -3,6 +3,7 @@ package com.udea.reservations.platform.auth.security;
 import java.util.Collection;
 import java.util.List;
 import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 
 public record UserPrincipal(
@@ -15,7 +16,15 @@ public record UserPrincipal(
 
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {
-        return List.of();
+        String authority = switch (role) {
+            case "cliente" -> "ROLE_CLIENTE";
+            case "proveedor" -> "ROLE_PROVEEDOR";
+            case "responsable" -> "ROLE_RESPONSABLE";
+            default -> null;
+        };
+        return authority == null
+            ? List.of()
+            : List.of(new SimpleGrantedAuthority(authority));
     }
 
     @Override
