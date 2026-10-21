@@ -28,6 +28,16 @@ CREATE TABLE servicio (
     activo boolean NOT NULL DEFAULT true,
     created_at timestamp without time zone NOT NULL DEFAULT now()
 );
+CREATE TABLE disponibilidad_servicio (
+    id           INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    servicio_id  INTEGER NOT NULL REFERENCES servicio(id),
+    fecha        DATE NOT NULL,
+    hora_inicio  TIME NOT NULL,
+    hora_fin     TIME NOT NULL,
+    created_at   TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT now(),
+    CONSTRAINT ck_disponibilidad_servicio_rango
+        CHECK (hora_fin > hora_inicio)
+);
 CREATE TABLE recurso (
     id           INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     proveedor_id INTEGER      NOT NULL REFERENCES proveedor(id),
@@ -89,6 +99,45 @@ CREATE INDEX ix_agenda_recurso     ON agenda (recurso_id);
 CREATE INDEX ix_horario_agenda     ON horario_disponible (agenda_id, dia_semana);
 CREATE INDEX ix_auditoria_usuario  ON evento_auditoria (usuario_id, created_at DESC);
 CREATE INDEX ix_servicio_proveedor ON servicio (proveedor_id);
+CREATE INDEX ix_disponibilidad_servicio_fecha
+    ON disponibilidad_servicio (servicio_id, fecha, hora_inicio);
+
+CREATE FUNCTION public.check_disponibilidad_servicio_overlap()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = pg_catalog, public
+AS $function$
+BEGIN
+    PERFORM 1
+    FROM public.servicio
+    WHERE id = NEW.servicio_id
+    FOR UPDATE;
+
+    IF EXISTS (
+        SELECT 1
+        FROM public.disponibilidad_servicio existing
+        WHERE existing.servicio_id = NEW.servicio_id
+          AND existing.fecha = NEW.fecha
+          AND existing.id IS DISTINCT FROM NEW.id
+          AND existing.hora_inicio < NEW.hora_fin
+          AND existing.hora_fin > NEW.hora_inicio
+    ) THEN
+        RAISE EXCEPTION 'Availability block overlaps an existing block.'
+            USING ERRCODE = '23P01',
+                  CONSTRAINT = 'ex_disponibilidad_servicio_no_overlap';
+    END IF;
+    RETURN NEW;
+END;
+$function$;
+
+REVOKE ALL ON FUNCTION public.check_disponibilidad_servicio_overlap()
+    FROM PUBLIC;
+
+CREATE TRIGGER trg_disponibilidad_servicio_no_overlap
+    BEFORE INSERT ON disponibilidad_servicio
+    FOR EACH ROW
+    EXECUTE FUNCTION public.check_disponibilidad_servicio_overlap();
 -- =========================================================
 -- Security: Supabase exposes tables through a public API (anon key).
 -- With RLS enabled and NO policies, that API can neither read nor write.
@@ -102,3 +151,4 @@ ALTER TABLE horario_disponible ENABLE ROW LEVEL SECURITY;
 ALTER TABLE reserva            ENABLE ROW LEVEL SECURITY;
 ALTER TABLE evento_auditoria   ENABLE ROW LEVEL SECURITY;
 ALTER TABLE servicio ENABLE ROW LEVEL SECURITY;
+ALTER TABLE disponibilidad_servicio ENABLE ROW LEVEL SECURITY;
