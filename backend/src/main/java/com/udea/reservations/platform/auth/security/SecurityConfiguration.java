@@ -26,6 +26,8 @@ import org.springframework.security.web.csrf.CsrfTokenRepository;
 import org.springframework.security.web.csrf.HttpSessionCsrfTokenRepository;
 import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
 import org.springframework.security.web.context.SecurityContextRepository;
+import org.springframework.security.web.authentication.logout.HttpStatusReturningLogoutSuccessHandler;
+import org.springframework.http.HttpStatus;
 
 @Configuration
 @EnableWebSecurity
@@ -117,6 +119,12 @@ public class SecurityConfiguration {
                         "ACCESS_DENIED",
                         "No tienes permiso para acceder a este recurso."
                     )
+                )
+            )
+            .logout(logout -> logout
+                .logoutUrl("/api/v1/auth/logout")
+                .logoutSuccessHandler(
+                    new HttpStatusReturningLogoutSuccessHandler(HttpStatus.NO_CONTENT)
                 )
             )
             .authorizeHttpRequests(authorize -> authorize

@@ -173,7 +173,19 @@ class SecurityFilterChainIntegrationTest {
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.email").value(EMAIL));
 
+        mockMvc.perform(get("/api/v1/auth/me")
+                .session(authenticatedSession)
+                .cookie(new Cookie("JSESSIONID", authenticatedSession.getId())))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.id").value(12))
+            .andExpect(jsonPath("$.data.role").value("cliente"));
+
         mockMvc.perform(get("/api/test/protected"))
+            .andExpect(status().isUnauthorized())
+            .andExpect(jsonPath("$.errorCode").value("AUTHENTICATION_REQUIRED"))
+            .andExpect(jsonPath("$.traceId").isNotEmpty());
+
+        mockMvc.perform(get("/api/v1/auth/me"))
             .andExpect(status().isUnauthorized())
             .andExpect(jsonPath("$.errorCode").value("AUTHENTICATION_REQUIRED"))
             .andExpect(jsonPath("$.traceId").isNotEmpty());
@@ -189,6 +201,30 @@ class SecurityFilterChainIntegrationTest {
 
         TokenSession renewed = fetchToken(authenticatedSession);
         assertThat(renewed.token()).isNotEqualTo(initial.token());
+
+        mockMvc.perform(post("/api/v1/auth/logout")
+                .session(authenticatedSession)
+                .header("X-CSRF-TOKEN", renewed.token()))
+            .andExpect(status().isNoContent());
+
+        mockMvc.perform(get("/api/v1/auth/me")
+                .session(authenticatedSession))
+            .andExpect(status().isUnauthorized())
+            .andExpect(jsonPath("$.errorCode").value("AUTHENTICATION_REQUIRED"));
+    }
+
+    @Test
+    void currentUserRequiresAnAuthenticatedSession() throws Exception {
+        mockMvc.perform(get("/api/v1/auth/me"))
+            .andExpect(status().isUnauthorized())
+            .andExpect(jsonPath("$.errorCode").value("AUTHENTICATION_REQUIRED"));
+    }
+
+    @Test
+    void logoutRequiresCsrfToken() throws Exception {
+        mockMvc.perform(post("/api/v1/auth/logout"))
+            .andExpect(status().isForbidden())
+            .andExpect(jsonPath("$.errorCode").value("CSRF_INVALID"));
     }
 
     @Test
