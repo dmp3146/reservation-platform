@@ -1,15 +1,22 @@
 package com.udea.reservations.platform.schedules.repository;
 
 import com.udea.reservations.platform.schedules.model.ScheduleBlock;
+import jakarta.persistence.LockModeType;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.List;
+import java.util.Optional;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 public interface ScheduleBlockRepository
     extends JpaRepository<ScheduleBlock, Integer> {
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select block from ScheduleBlock block where block.id = :id")
+    Optional<ScheduleBlock> findByIdForUpdate(@Param("id") Integer id);
 
     @Query("""
         select count(block)
