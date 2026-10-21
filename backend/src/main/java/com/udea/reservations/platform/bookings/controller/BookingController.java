@@ -6,9 +6,11 @@ import com.udea.reservations.platform.bookings.dto.BookingResponse;
 import com.udea.reservations.platform.bookings.service.BookingService;
 import com.udea.reservations.platform.common.dto.ApiSuccessResponse;
 import jakarta.validation.Valid;
+import java.util.List;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -33,5 +35,15 @@ public class BookingController {
         return ResponseEntity.status(HttpStatus.CREATED).body(
             new ApiSuccessResponse<>("Reserva creada exitosamente.", response)
         );
+    }
+
+    @GetMapping("/active")
+    public ResponseEntity<ApiSuccessResponse<List<BookingResponse>>> findActive(
+        @AuthenticationPrincipal UserPrincipal principal
+    ) {
+        return ResponseEntity.ok(new ApiSuccessResponse<>(
+            "Reservas activas consultadas exitosamente.",
+            bookingService.findActiveForCustomer(principal.id())
+        ));
     }
 }

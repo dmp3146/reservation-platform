@@ -3,11 +3,27 @@ package com.udea.reservations.platform.bookings.repository;
 import com.udea.reservations.platform.bookings.model.Booking;
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.util.List;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 public interface BookingRepository extends JpaRepository<Booking, Integer> {
+
+    @Query("""
+        select booking
+        from Booking booking
+        left join fetch booking.scheduleBlock block
+        left join fetch block.service offering
+        left join fetch offering.provider provider
+        where booking.user.id = :userId
+          and booking.status = :status
+        order by booking.date asc, booking.startTime asc
+        """)
+    List<Booking> findAllByUserIdAndStatusWithDetails(
+        @Param("userId") Integer userId,
+        @Param("status") String status
+    );
 
     @Query(value = """
         select exists (
