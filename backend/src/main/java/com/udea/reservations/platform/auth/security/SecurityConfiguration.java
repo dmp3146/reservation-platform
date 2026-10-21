@@ -129,6 +129,8 @@ public class SecurityConfiguration {
                 .hasAuthority("ROLE_PROVEEDOR")
                 .requestMatchers(HttpMethod.POST, "/api/v1/bookings")
                 .hasAuthority("ROLE_CLIENTE")
+                .requestMatchers(HttpMethod.GET, "/api/v1/bookings/active")
+                .hasAuthority("ROLE_CLIENTE")
                 .requestMatchers(HttpMethod.GET, "/api/v1/providers/me/services")
                 .hasAuthority("ROLE_PROVEEDOR")
                 .requestMatchers(

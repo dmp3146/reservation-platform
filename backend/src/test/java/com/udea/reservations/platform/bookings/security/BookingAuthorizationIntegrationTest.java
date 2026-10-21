@@ -26,6 +26,7 @@ import com.udea.reservations.platform.users.repository.UserRepository;
 import jakarta.servlet.http.Cookie;
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
@@ -54,6 +55,8 @@ import tools.jackson.databind.ObjectMapper;
 class BookingAuthorizationIntegrationTest {
 
     private static final String BOOKING_PATH = "/api/v1/bookings";
+    private static final String ACTIVE_BOOKINGS_PATH =
+        "/api/v1/bookings/active";
 
     @Autowired
     private MockMvc mockMvc;
@@ -102,8 +105,75 @@ class BookingAuthorizationIntegrationTest {
     }
 
     @Test
+    void clientCanReadOnlyTheirActiveBookingsAndUserHeaderIsIgnored()
+        throws Exception {
+        when(bookingService.findActiveForCustomer(42)).thenReturn(List.of(
+            new BookingResponse(
+                55,
+                15,
+                "Consulta",
+                "Café Central",
+                LocalDate.of(2030, 1, 2),
+                LocalTime.of(9, 30),
+                LocalTime.of(10, 0),
+                "activa"
+            ),
+            new BookingResponse(
+                56,
+                16,
+                "Control",
+                "Clínica Norte",
+                LocalDate.of(2030, 1, 3),
+                LocalTime.of(11, 0),
+                LocalTime.of(11, 45),
+                "activa"
+            )
+        ));
+        AuthenticatedSession session = authenticatedSession("cliente", 42);
+
+        mockMvc.perform(get(ACTIVE_BOOKINGS_PATH)
+                .session(session.session())
+                .cookie(session.cookie())
+                .header("X-User-Id", "999"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.length()").value(2))
+            .andExpect(jsonPath("$.data[0].bookingId").value(55))
+            .andExpect(jsonPath("$.data[0].serviceName").value("Consulta"))
+            .andExpect(jsonPath("$.data[0].providerName").value("Café Central"))
+            .andExpect(jsonPath("$.data[0].date").value("2030-01-02"))
+            .andExpect(jsonPath("$.data[0].startTime").value("09:30:00"))
+            .andExpect(jsonPath("$.data[0].endTime").value("10:00:00"))
+            .andExpect(jsonPath("$.data[0].status").value("activa"))
+            .andExpect(jsonPath("$.data[1].bookingId").value(56));
+
+        verify(bookingService).findActiveForCustomer(42);
+    }
+
+    @Test
+    void clientWithNoActiveBookingsReceivesAnEmptyCollection() throws Exception {
+        when(bookingService.findActiveForCustomer(42)).thenReturn(List.of());
+        AuthenticatedSession session = authenticatedSession("cliente", 42);
+
+        mockMvc.perform(get(ACTIVE_BOOKINGS_PATH)
+                .session(session.session())
+                .cookie(session.cookie()))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data").isArray())
+            .andExpect(jsonPath("$.data.length()").value(0));
+
+        verify(bookingService).findActiveForCustomer(42);
+    }
+
+    @Test
     void anonymousRequestRequiresAuthentication() throws Exception {
         CsrfSession session = csrfSession();
+
+        mockMvc.perform(get(ACTIVE_BOOKINGS_PATH)
+                .session(session.session())
+                .cookie(session.cookie()))
+            .andExpect(status().isUnauthorized())
+            .andExpect(jsonPath("$.errorCode").value("AUTHENTICATION_REQUIRED"))
+            .andExpect(jsonPath("$.traceId").isNotEmpty());
 
         mockMvc.perform(post(BOOKING_PATH)
                 .session(session.session())
@@ -129,6 +199,14 @@ class BookingAuthorizationIntegrationTest {
                     .header("X-CSRF-TOKEN", session.csrfToken())
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(validBody()))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.errorCode").value("ACCESS_DENIED"))
+                .andExpect(jsonPath("$.traceId").isNotEmpty());
+
+            mockMvc.perform(get(ACTIVE_BOOKINGS_PATH)
+                    .session(session.session())
+                    .cookie(session.cookie())
+                    .header("X-User-Id", "999"))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.errorCode").value("ACCESS_DENIED"))
                 .andExpect(jsonPath("$.traceId").isNotEmpty());

@@ -16,6 +16,7 @@ import java.sql.SQLException;
 import java.time.Clock;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.util.List;
 import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -28,6 +29,7 @@ public class BookingServiceImpl implements BookingService {
 
     private static final int MINUTES_PER_DAY = 24 * 60;
     private static final String UNIQUE_VIOLATION_SQL_STATE = "23505";
+    private static final String ACTIVE_STATUS = "activa";
 
     private final BookingRepository bookingRepository;
     private final ScheduleBlockRepository scheduleBlockRepository;
@@ -86,7 +88,7 @@ public class BookingServiceImpl implements BookingService {
         booking.setDate(block.getDate());
         booking.setStartTime(request.startTime());
         booking.setEndTime(endTime);
-        booking.setStatus("activa");
+        booking.setStatus(ACTIVE_STATUS);
 
         try {
             return toResponse(bookingRepository.saveAndFlush(booking));
@@ -98,6 +100,21 @@ public class BookingServiceImpl implements BookingService {
         }
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public List<BookingResponse> findActiveForCustomer(
+        Integer authenticatedUserId
+    ) {
+        return bookingRepository
+            .findAllByUserIdAndStatusWithDetails(
+                authenticatedUserId,
+                ACTIVE_STATUS
+            )
+            .stream()
+            .map(BookingServiceImpl::toResponse)
+            .toList();
+    }
+
     private User userReference(Integer authenticatedUserId) {
         return userRepository.getReferenceById(
             Objects.requireNonNull(authenticatedUserId)
@@ -105,15 +122,19 @@ public class BookingServiceImpl implements BookingService {
     }
 
     private static BookingResponse toResponse(Booking booking) {
-        ServiceOffering service = booking.getScheduleBlock().getService();
+        ScheduleBlock block = booking.getScheduleBlock();
+        ServiceOffering service = block == null ? null : block.getService();
         return new BookingResponse(
             booking.getId(),
-            service.getId(),
-            service.getName(),
-            service.getProvider().getBusinessName(),
+            service == null ? null : service.getId(),
+            service == null ? null : service.getName(),
+            service == null ? null : service.getProvider().getBusinessName(),
             booking.getDate(),
             booking.getStartTime(),
-            booking.getEndTime(),
+            booking.getEndTime() == null
+                ? (service == null ? null : booking.getStartTime()
+                    .plusMinutes(service.getDurationMinutes()))
+                : booking.getEndTime(),
             booking.getStatus()
         );
     }
