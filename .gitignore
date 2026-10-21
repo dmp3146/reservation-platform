@@ -21,3 +21,8 @@ target/
 /docs/adr/*
 !/docs/adr/[0-9][0-9][0-9][0-9]-*.md
 /docs/adr/0000-adr-template.md
+!/docs/requirements/
+/docs/requirements/*
+!/docs/requirements/gherkin/
+/docs/requirements/gherkin/*
+!/docs/requirements/gherkin/HU-1-user-registration.feature
