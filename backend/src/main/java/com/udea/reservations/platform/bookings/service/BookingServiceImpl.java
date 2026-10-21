@@ -2,8 +2,11 @@ package com.udea.reservations.platform.bookings.service;
 
 import com.udea.reservations.platform.bookings.dto.BookingCreateRequest;
 import com.udea.reservations.platform.bookings.dto.BookingResponse;
+import com.udea.reservations.platform.bookings.exception.BookingAlreadyCancelledException;
 import com.udea.reservations.platform.bookings.exception.BookingConflictException;
+import com.udea.reservations.platform.bookings.exception.BookingCompletedCannotBeCancelledException;
 import com.udea.reservations.platform.bookings.exception.BookingDateTimeInPastException;
+import com.udea.reservations.platform.bookings.exception.BookingNotFoundException;
 import com.udea.reservations.platform.bookings.exception.BookingScheduleNotFoundException;
 import com.udea.reservations.platform.bookings.model.Booking;
 import com.udea.reservations.platform.bookings.repository.BookingRepository;
@@ -30,6 +33,8 @@ public class BookingServiceImpl implements BookingService {
     private static final int MINUTES_PER_DAY = 24 * 60;
     private static final String UNIQUE_VIOLATION_SQL_STATE = "23505";
     private static final String ACTIVE_STATUS = "activa";
+    private static final String CANCELLED_STATUS = "cancelada";
+    private static final String COMPLETED_STATUS = "completada";
 
     private final BookingRepository bookingRepository;
     private final ScheduleBlockRepository scheduleBlockRepository;
@@ -113,6 +118,30 @@ public class BookingServiceImpl implements BookingService {
             .stream()
             .map(BookingServiceImpl::toResponse)
             .toList();
+    }
+
+    @Override
+    @Transactional
+    public BookingResponse cancel(Integer authenticatedUserId, Integer bookingId) {
+        Booking booking = bookingRepository.findByIdForUpdate(bookingId)
+            .filter(candidate -> Objects.equals(
+                candidate.getUser().getId(),
+                authenticatedUserId
+            ))
+            .orElseThrow(BookingNotFoundException::new);
+
+        if (CANCELLED_STATUS.equals(booking.getStatus())) {
+            throw new BookingAlreadyCancelledException();
+        }
+        if (COMPLETED_STATUS.equals(booking.getStatus())) {
+            throw new BookingCompletedCannotBeCancelledException();
+        }
+        if (!ACTIVE_STATUS.equals(booking.getStatus())) {
+            throw new BookingConflictException();
+        }
+
+        booking.setStatus(CANCELLED_STATUS);
+        return toResponse(bookingRepository.saveAndFlush(booking));
     }
 
     private User userReference(Integer authenticatedUserId) {

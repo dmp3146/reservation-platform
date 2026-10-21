@@ -31,6 +31,9 @@ import org.springframework.security.web.context.SecurityContextRepository;
 @EnableWebSecurity
 public class SecurityConfiguration {
 
+    private static final String ROLE_PROVIDER = "ROLE_PROVEEDOR";
+    private static final String ROLE_CLIENT = "ROLE_CLIENTE";
+
     @Bean
     public CsrfTokenRepository csrfTokenRepository() {
         HttpSessionCsrfTokenRepository repository = new HttpSessionCsrfTokenRepository();
@@ -124,15 +127,17 @@ public class SecurityConfiguration {
                     "/api/v1/providers"
                 ).permitAll()
                 .requestMatchers(HttpMethod.POST, "/api/v1/services")
-                .hasAuthority("ROLE_PROVEEDOR")
+                .hasAuthority(ROLE_PROVIDER)
                 .requestMatchers(HttpMethod.POST, "/api/v1/providers/me/schedules")
-                .hasAuthority("ROLE_PROVEEDOR")
+                .hasAuthority(ROLE_PROVIDER)
                 .requestMatchers(HttpMethod.POST, "/api/v1/bookings")
-                .hasAuthority("ROLE_CLIENTE")
+                .hasAuthority(ROLE_CLIENT)
                 .requestMatchers(HttpMethod.GET, "/api/v1/bookings/active")
-                .hasAuthority("ROLE_CLIENTE")
+                .hasAuthority(ROLE_CLIENT)
+                .requestMatchers(HttpMethod.PATCH, "/api/v1/bookings/*/cancel")
+                .hasAuthority(ROLE_CLIENT)
                 .requestMatchers(HttpMethod.GET, "/api/v1/providers/me/services")
-                .hasAuthority("ROLE_PROVEEDOR")
+                .hasAuthority(ROLE_PROVIDER)
                 .requestMatchers(
                     HttpMethod.GET,
                     "/api/v1/services/available",

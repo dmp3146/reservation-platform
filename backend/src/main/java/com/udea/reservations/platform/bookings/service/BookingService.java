@@ -9,4 +9,6 @@ public interface BookingService {
     BookingResponse create(Integer authenticatedUserId, BookingCreateRequest request);
 
     List<BookingResponse> findActiveForCustomer(Integer authenticatedUserId);
+
+    BookingResponse cancel(Integer authenticatedUserId, Integer bookingId);
 }
