@@ -1,6 +1,7 @@
 package com.udea.reservations.platform.bookings.service;
 
 import com.udea.reservations.platform.bookings.dto.BookingCreateRequest;
+import com.udea.reservations.platform.bookings.dto.BookingDetailResponse;
 import com.udea.reservations.platform.bookings.dto.BookingResponse;
 import java.util.List;
 
@@ -11,4 +12,11 @@ public interface BookingService {
     List<BookingResponse> findActiveForCustomer(Integer authenticatedUserId);
 
     BookingResponse cancel(Integer authenticatedUserId, Integer bookingId);
+
+    List<BookingResponse> findHistoryForCustomer(Integer authenticatedUserId);
+
+    BookingDetailResponse findOwnedBooking(
+        Integer authenticatedUserId,
+        Integer bookingId
+    );
 }

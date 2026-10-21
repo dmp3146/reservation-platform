@@ -1,6 +1,7 @@
 package com.udea.reservations.platform.bookings.service;
 
 import com.udea.reservations.platform.bookings.dto.BookingCreateRequest;
+import com.udea.reservations.platform.bookings.dto.BookingDetailResponse;
 import com.udea.reservations.platform.bookings.dto.BookingResponse;
 import com.udea.reservations.platform.bookings.exception.BookingAlreadyCancelledException;
 import com.udea.reservations.platform.bookings.exception.BookingConflictException;
@@ -144,6 +145,40 @@ public class BookingServiceImpl implements BookingService {
         return toResponse(bookingRepository.saveAndFlush(booking));
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public List<BookingResponse> findHistoryForCustomer(
+        Integer authenticatedUserId
+    ) {
+        return bookingRepository.findHistoryByUserIdWithDetails(authenticatedUserId)
+            .stream()
+            .map(BookingServiceImpl::toResponse)
+            .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public BookingDetailResponse findOwnedBooking(
+        Integer authenticatedUserId,
+        Integer bookingId
+    ) {
+        Booking booking = bookingRepository
+            .findOwnedByIdWithDetails(bookingId, authenticatedUserId)
+            .orElseThrow(BookingNotFoundException::new);
+        BookingResponse response = toResponse(booking);
+        return new BookingDetailResponse(
+            response.bookingId(),
+            response.serviceId(),
+            response.serviceName(),
+            response.providerName(),
+            booking.getUser().getName(),
+            response.date(),
+            response.startTime(),
+            response.endTime(),
+            response.status()
+        );
+    }
+
     private User userReference(Integer authenticatedUserId) {
         return userRepository.getReferenceById(
             Objects.requireNonNull(authenticatedUserId)
@@ -153,6 +188,11 @@ public class BookingServiceImpl implements BookingService {
     private static BookingResponse toResponse(Booking booking) {
         ScheduleBlock block = booking.getScheduleBlock();
         ServiceOffering service = block == null ? null : block.getService();
+        LocalTime endTime = booking.getEndTime();
+        if (endTime == null && service != null) {
+            endTime = booking.getStartTime()
+                .plusMinutes(service.getDurationMinutes());
+        }
         return new BookingResponse(
             booking.getId(),
             service == null ? null : service.getId(),
@@ -160,10 +200,7 @@ public class BookingServiceImpl implements BookingService {
             service == null ? null : service.getProvider().getBusinessName(),
             booking.getDate(),
             booking.getStartTime(),
-            booking.getEndTime() == null
-                ? (service == null ? null : booking.getStartTime()
-                    .plusMinutes(service.getDurationMinutes()))
-                : booking.getEndTime(),
+            endTime,
             booking.getStatus()
         );
     }
