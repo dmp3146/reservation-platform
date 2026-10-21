@@ -19,4 +19,6 @@ public interface ServiceOfferingService {
     List<ServiceAvailabilityResponse> findActiveServicesByProvider(
         Integer providerId
     );
+
+    void deleteForProvider(Integer authenticatedUserId, Integer serviceId);
 }

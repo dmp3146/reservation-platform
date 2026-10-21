@@ -128,6 +128,8 @@ public class SecurityConfiguration {
                 ).permitAll()
                 .requestMatchers(HttpMethod.POST, "/api/v1/services")
                 .hasAuthority(ROLE_PROVIDER)
+                .requestMatchers(HttpMethod.DELETE, "/api/v1/services/*")
+                .hasAuthority(ROLE_PROVIDER)
                 .requestMatchers(HttpMethod.POST, "/api/v1/providers/me/schedules")
                 .hasAuthority(ROLE_PROVIDER)
                 .requestMatchers(HttpMethod.POST, "/api/v1/bookings")

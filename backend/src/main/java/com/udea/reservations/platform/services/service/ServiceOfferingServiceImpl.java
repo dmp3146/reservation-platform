@@ -1,12 +1,15 @@
 package com.udea.reservations.platform.services.service;
 
+import com.udea.reservations.platform.bookings.repository.BookingRepository;
 import com.udea.reservations.platform.providers.exception.ProviderNotFoundException;
 import com.udea.reservations.platform.providers.model.Provider;
 import com.udea.reservations.platform.providers.repository.ProviderRepository;
+import com.udea.reservations.platform.schedules.exception.ServiceNotFoundException;
 import com.udea.reservations.platform.services.dto.ServiceCreateRequest;
 import com.udea.reservations.platform.services.dto.ServiceAvailabilityResponse;
 import com.udea.reservations.platform.services.dto.ServiceResponse;
 import com.udea.reservations.platform.services.exception.ProviderProfileNotFoundException;
+import com.udea.reservations.platform.services.exception.ServiceHasActiveBookingsException;
 import com.udea.reservations.platform.services.model.ServiceOffering;
 import com.udea.reservations.platform.services.repository.ServiceRepository;
 import com.udea.reservations.platform.schedules.repository.ScheduleBlockRepository;
@@ -26,6 +29,7 @@ public class ServiceOfferingServiceImpl implements ServiceOfferingService {
     private final ProviderRepository providerRepository;
     private final ServiceRepository serviceRepository;
     private final ScheduleBlockRepository scheduleBlockRepository;
+    private final BookingRepository bookingRepository;
 
     @Override
     @Transactional
@@ -110,6 +114,28 @@ public class ServiceOfferingServiceImpl implements ServiceOfferingService {
                 serviceIdsWithFutureSchedules.contains(offering.getId())
             ))
             .toList();
+    }
+
+    @Override
+    @Transactional
+    public void deleteForProvider(
+        Integer authenticatedUserId,
+        Integer serviceId
+    ) {
+        ServiceOffering offering = serviceRepository
+            .findByIdForUpdate(serviceId)
+            .filter(candidate -> candidate.getProvider().getUser().getId()
+                .equals(authenticatedUserId))
+            .orElseThrow(ServiceNotFoundException::new);
+
+        if (bookingRepository.existsByScheduleBlock_Service_IdAndStatus(
+            offering.getId(),
+            "activa"
+        )) {
+            throw new ServiceHasActiveBookingsException();
+        }
+
+        serviceRepository.deactivateById(offering.getId());
     }
 
     private Set<Integer> findServiceIdsWithFutureSchedules(LocalDateTime now) {

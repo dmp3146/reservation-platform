@@ -51,6 +51,10 @@ public class ScheduleServiceImpl implements ScheduleService {
             ))
             .orElseThrow(ServiceNotFoundException::new);
 
+        if (!Boolean.TRUE.equals(service.getActive())) {
+            throw new ServiceNotFoundException();
+        }
+
         if (scheduleBlockRepository.countOverlapping(
             service.getId(),
             request.fecha(),

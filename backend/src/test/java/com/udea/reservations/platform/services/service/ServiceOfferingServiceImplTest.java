@@ -3,8 +3,11 @@ package com.udea.reservations.platform.services.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import com.udea.reservations.platform.bookings.repository.BookingRepository;
 import com.udea.reservations.platform.providers.model.Provider;
 import com.udea.reservations.platform.providers.exception.ProviderNotFoundException;
 import com.udea.reservations.platform.providers.repository.ProviderRepository;
@@ -12,9 +15,12 @@ import com.udea.reservations.platform.services.dto.ServiceCreateRequest;
 import com.udea.reservations.platform.services.dto.ServiceAvailabilityResponse;
 import com.udea.reservations.platform.services.dto.ServiceResponse;
 import com.udea.reservations.platform.services.exception.ProviderProfileNotFoundException;
+import com.udea.reservations.platform.services.exception.ServiceHasActiveBookingsException;
 import com.udea.reservations.platform.services.model.ServiceOffering;
+import com.udea.reservations.platform.schedules.exception.ServiceNotFoundException;
 import com.udea.reservations.platform.services.repository.ServiceRepository;
 import com.udea.reservations.platform.schedules.repository.ScheduleBlockRepository;
+import com.udea.reservations.platform.users.model.User;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
@@ -34,6 +40,9 @@ class ServiceOfferingServiceImplTest {
 
     @Mock
     private ScheduleBlockRepository scheduleBlockRepository;
+
+    @Mock
+    private BookingRepository bookingRepository;
 
     @InjectMocks
     private ServiceOfferingServiceImpl service;
@@ -72,13 +81,15 @@ class ServiceOfferingServiceImplTest {
     @Test
     void rejectsProviderRoleWithoutProviderProfile() {
         when(providerRepository.findByUser_Id(42)).thenReturn(Optional.empty());
+        ServiceCreateRequest request = new ServiceCreateRequest(
+            "Consulta",
+            "Consulta inicial",
+            45
+        );
 
-        assertThatThrownBy(() -> service.createForProvider(
-            42,
-            new ServiceCreateRequest("Consulta", "Consulta inicial", 45)
-        ))
+        assertThatThrownBy(() -> service.createForProvider(42, request))
             .isInstanceOf(ProviderProfileNotFoundException.class);
-        org.mockito.Mockito.verifyNoInteractions(serviceRepository);
+        verifyNoInteractions(serviceRepository);
     }
 
     @Test
@@ -190,6 +201,49 @@ class ServiceOfferingServiceImplTest {
     }
 
     @Test
+    void deactivatesOwnedServiceWithoutActiveBookings() {
+        ServiceOffering offering = ownedService(15, 42);
+        when(serviceRepository.findByIdForUpdate(15))
+            .thenReturn(Optional.of(offering));
+        when(bookingRepository.existsByScheduleBlock_Service_IdAndStatus(15, "activa"))
+            .thenReturn(false);
+
+        service.deleteForProvider(42, 15);
+
+        verify(serviceRepository).findByIdForUpdate(15);
+        verify(bookingRepository)
+            .existsByScheduleBlock_Service_IdAndStatus(15, "activa");
+        verify(serviceRepository).deactivateById(15);
+    }
+
+    @Test
+    void refusesToDeactivateServiceWithActiveBookings() {
+        ServiceOffering offering = ownedService(15, 42);
+        when(serviceRepository.findByIdForUpdate(15))
+            .thenReturn(Optional.of(offering));
+        when(bookingRepository.existsByScheduleBlock_Service_IdAndStatus(15, "activa"))
+            .thenReturn(true);
+
+        assertThatThrownBy(() -> service.deleteForProvider(42, 15))
+            .isInstanceOf(ServiceHasActiveBookingsException.class);
+
+        verify(serviceRepository, never()).deactivateById(15);
+    }
+
+    @Test
+    void hidesServiceOwnedByAnotherProvider() {
+        ServiceOffering offering = ownedService(15, 99);
+        when(serviceRepository.findByIdForUpdate(15))
+            .thenReturn(Optional.of(offering));
+
+        assertThatThrownBy(() -> service.deleteForProvider(42, 15))
+            .isInstanceOf(ServiceNotFoundException.class);
+
+        verifyNoInteractions(bookingRepository);
+        verify(serviceRepository, never()).deactivateById(15);
+    }
+
+    @Test
     void availableServiceListIsEmptyWhenNoServiceHasFutureSchedule() {
         when(scheduleBlockRepository.findServiceIdsWithFutureSchedules(
             org.mockito.ArgumentMatchers.any(),
@@ -197,7 +251,7 @@ class ServiceOfferingServiceImplTest {
         )).thenReturn(List.of());
 
         assertThat(service.findAvailableServices()).isEmpty();
-        org.mockito.Mockito.verify(serviceRepository, org.mockito.Mockito.never())
+        verify(serviceRepository, never())
             .findAllByIdInAndActiveTrueOrderByIdAsc(
                 org.mockito.ArgumentMatchers.anyCollection()
             );
@@ -219,6 +273,17 @@ class ServiceOfferingServiceImplTest {
         offering.setDescription("Consulta inicial");
         offering.setDurationMinutes(duration);
         offering.setActive(active);
+        return offering;
+    }
+
+    private static ServiceOffering ownedService(int serviceId, int ownerId) {
+        Provider provider = new Provider();
+        User owner = new User();
+        owner.setId(ownerId);
+        provider.setUser(owner);
+        ServiceOffering offering = new ServiceOffering();
+        offering.setId(serviceId);
+        offering.setProvider(provider);
         return offering;
     }
 }
