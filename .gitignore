@@ -16,4 +16,8 @@ replay_pid*.log
 target/
 
 # Documentation kept locally
-/docs/
+/docs/*
+!/docs/adr/
+/docs/adr/*
+!/docs/adr/[0-9][0-9][0-9][0-9]-*.md
+/docs/adr/0000-adr-template.md
