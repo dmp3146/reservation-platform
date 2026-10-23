@@ -1,6 +1,7 @@
 package com.udea.reservations.platform.bookings.repository;
 
 import com.udea.reservations.platform.bookings.model.Booking;
+import com.udea.reservations.platform.bookings.dto.BookedSlotResponse;
 import jakarta.persistence.LockModeType;
 import java.time.LocalDate;
 import java.time.LocalTime;
@@ -31,6 +32,37 @@ public interface BookingRepository extends JpaRepository<Booking, Integer> {
         """)
     List<Booking> findAllByUserIdAndStatusWithDetails(
         @Param("userId") Integer userId,
+        @Param("status") String status
+    );
+
+    @Query("""
+        select booking
+        from Booking booking
+        join fetch booking.scheduleBlock block
+        join fetch block.service offering
+        join fetch offering.provider provider
+        where provider.user.id = :providerUserId
+          and booking.status = :status
+        order by booking.date asc, booking.startTime asc
+        """)
+    List<Booking> findAllByProviderUserIdAndStatusWithDetails(
+        @Param("providerUserId") Integer providerUserId,
+        @Param("status") String status
+    );
+
+    @Query("""
+        select new com.udea.reservations.platform.bookings.dto.BookedSlotResponse(
+            booking.date,
+            booking.startTime,
+            booking.endTime
+        )
+        from Booking booking
+        where booking.scheduleBlock.service.id = :serviceId
+          and booking.status = :status
+        order by booking.date asc, booking.startTime asc
+        """)
+    List<BookedSlotResponse> findBookedSlotsByServiceIdAndStatus(
+        @Param("serviceId") Integer serviceId,
         @Param("status") String status
     );
 

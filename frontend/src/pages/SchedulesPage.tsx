@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react'
 import { ApiError, api } from '../api/client'
 import type { ScheduleBlock, ServiceOffering } from '../api/types'
 import { Alert, EmptyState, Loading } from '../components/Feedback'
+import { ProviderBookingsCalendar } from './ProviderBookingsCalendar'
 
 export function SchedulesPage() {
   const [services, setServices] = useState<ServiceOffering[]>([])
@@ -47,16 +48,22 @@ export function SchedulesPage() {
       setError('Selecciona un servicio antes de crear disponibilidad.')
       return
     }
+    const form = new FormData(formElement)
+    const horaInicio = String(form.get('horaInicio') ?? '')
+    const horaFin = String(form.get('horaFin') ?? '')
+    if (horaFin <= horaInicio) {
+      setError('La hora de finalización debe ser posterior a la hora de inicio.')
+      return
+    }
     setError('')
     setNotice('')
     setSaving(true)
-    const form = new FormData(formElement)
     try {
       const block = await api.createSchedule({
         serviceId: Number(selectedService),
         fecha: String(form.get('fecha') ?? ''),
-        horaInicio: String(form.get('horaInicio') ?? ''),
-        horaFin: String(form.get('horaFin') ?? ''),
+        horaInicio,
+        horaFin,
       })
       setNotice(`Bloque creado para ${block.fecha}, de ${block.horaInicio} a ${block.horaFin}.`)
       formElement.reset()
@@ -78,6 +85,7 @@ export function SchedulesPage() {
         <div><span className="eyebrow">AGENDA DEL PROVEEDOR</span><h2>Publica tu disponibilidad</h2><p>Define bloques concretos para que los clientes puedan reservar.</p></div>
       </div>
       <Alert>{error}</Alert><Alert tone="success">{notice}</Alert>
+      <ProviderBookingsCalendar />
       {loading ? <Loading /> : services.length === 0 ? (
         <EmptyState title="Necesitas un servicio activo" description="Crea primero un servicio para poder publicar bloques de disponibilidad." />
       ) : (

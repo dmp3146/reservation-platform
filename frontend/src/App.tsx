@@ -9,23 +9,52 @@ import { ExplorePage } from './pages/ExplorePage'
 import { ProviderPage } from './pages/ProviderPage'
 import { ReportsPage } from './pages/ReportsPage'
 import { SchedulesPage } from './pages/SchedulesPage'
+import type { SessionUser } from './api/types'
+import type { LoginAccountType } from './pages/AccessPage'
+
+function mismatchNotice(user: SessionUser, selectedAccountType: LoginAccountType): string {
+  if (user.role === selectedAccountType) return ''
+  const roleNames: Record<string, string> = {
+    cliente: 'cliente',
+    proveedor: 'proveedor',
+    responsable: 'responsable',
+  }
+  const actualRole = roleNames[user.role] ?? user.role
+  return `Iniciaste sesión con una cuenta de ${actualRole}, no como ${selectedAccountType}. Se mantuvo el rol y los permisos de tu cuenta.`
+}
 
 function AccessBoundary() {
   const { loading, user, authError, refreshSession } = useAuth()
+  const [accessNotice, setAccessNotice] = useState('')
   if (loading) return <div className="session-loading"><Loading label="Comprobando tu sesión…" /></div>
   if (!user) {
-    return <AccessPage sessionError={authError} onRetry={() => void refreshSession()} />
+    return (
+      <AccessPage
+        sessionError={authError}
+        onRetry={() => void refreshSession()}
+        onAuthenticated={(authenticatedUser, selectedAccountType) => {
+          setAccessNotice(mismatchNotice(authenticatedUser, selectedAccountType))
+        }}
+      />
+    )
   }
-  return <AuthenticatedApp />
+  return <AuthenticatedApp accessNotice={accessNotice} onDismissAccessNotice={() => setAccessNotice('')} />
 }
 
-function AuthenticatedApp() {
+function AuthenticatedApp({
+  accessNotice,
+  onDismissAccessNotice,
+}: {
+  accessNotice: string
+  onDismissAccessNotice(): void
+}) {
   const { user, signOut } = useAuth()
   const [page, setPage] = useState<AppPage>('home')
   const [signOutError, setSignOutError] = useState('')
   if (!user) return null
 
   async function logout() {
+    onDismissAccessNotice()
     setSignOutError('')
     try {
       await signOut()
@@ -44,6 +73,7 @@ function AuthenticatedApp() {
 
   return (
     <AppShell page={activePage} onNavigate={setPage} onSignOut={() => void logout()}>
+      {accessNotice && <Alert tone="info">{accessNotice}</Alert>}
       {signOutError && <Alert>{signOutError}</Alert>}
       {activePage === 'home' && <DashboardPage onNavigate={setPage} />}
       {activePage === 'explore' && <ExplorePage />}

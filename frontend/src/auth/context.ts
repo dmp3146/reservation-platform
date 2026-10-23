@@ -5,7 +5,7 @@ export interface AuthContextValue {
   user: SessionUser | null
   loading: boolean
   authError: string | null
-  signIn(payload: LoginPayload): Promise<void>
+  signIn(payload: LoginPayload): Promise<SessionUser>
   signOut(): Promise<void>
   refreshSession(): Promise<void>
 }

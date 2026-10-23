@@ -3,16 +3,23 @@ import { ApiError, api } from '../api/client'
 import type { ProviderRegisterPayload, RegisterPayload } from '../api/types'
 import { useAuth } from '../auth/useAuth'
 import { Alert } from '../components/Feedback'
+import { ThemeToggle } from '../components/ThemeToggle'
+import type { SessionUser } from '../api/types'
+
+export type LoginAccountType = 'cliente' | 'proveedor'
 
 export function AccessPage({
   sessionError,
   onRetry,
+  onAuthenticated,
 }: {
   sessionError?: string | null
   onRetry?: () => void
+  onAuthenticated?: (user: SessionUser, selectedAccountType: LoginAccountType) => void
 }) {
   const { signIn } = useAuth()
   const [mode, setMode] = useState<'login' | 'customer' | 'provider'>('login')
+  const [selectedAccountType, setSelectedAccountType] = useState<LoginAccountType>('cliente')
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
   const [submitting, setSubmitting] = useState(false)
@@ -29,7 +36,8 @@ export function AccessPage({
 
     try {
       if (mode === 'login') {
-        await signIn({ email, password })
+        const authenticatedUser = await signIn({ email, password })
+        onAuthenticated?.(authenticatedUser, selectedAccountType)
         return
       }
 
@@ -87,6 +95,7 @@ export function AccessPage({
       </section>
 
       <section className="access-form-wrap">
+        <ThemeToggle />
         <div className="access-form-card">
           <div className="mobile-brand brand">
             <span className="brand-mark">r</span>
@@ -107,6 +116,34 @@ export function AccessPage({
                 : 'Completa tus datos para empezar.'}
             </p>
           </div>
+          {mode === 'login' && (
+            <div className="account-type-selector" role="radiogroup" aria-label="Tipo de cuenta">
+              <button
+                className={`account-type-option ${selectedAccountType === 'cliente' ? 'selected' : ''}`}
+                type="button"
+                role="radio"
+                aria-checked={selectedAccountType === 'cliente'}
+                onClick={() => {
+                  setSelectedAccountType('cliente')
+                  setError('')
+                }}
+              >
+                Soy cliente
+              </button>
+              <button
+                className={`account-type-option ${selectedAccountType === 'proveedor' ? 'selected' : ''}`}
+                type="button"
+                role="radio"
+                aria-checked={selectedAccountType === 'proveedor'}
+                onClick={() => {
+                  setSelectedAccountType('proveedor')
+                  setError('')
+                }}
+              >
+                Soy proveedor
+              </button>
+            </div>
+          )}
           {sessionError && (
             <div className="session-error-row">
               <Alert>{sessionError}</Alert>
@@ -117,28 +154,28 @@ export function AccessPage({
           <Alert tone="success">{notice}</Alert>
           <form className="form-stack" onSubmit={handleSubmit}>
             {mode !== 'login' && (
-              <label>
+              <label key="name">
                 Nombre completo
                 <input name="name" autoComplete="name" required maxLength={150} />
               </label>
             )}
-            <label>
+            <label key="email">
               Correo electrónico
               <input name="email" type="email" autoComplete="email" required maxLength={150} />
             </label>
             {mode === 'provider' && (
               <>
-                <label>
+                <label key="businessName">
                   Nombre del negocio
                   <input name="businessName" required maxLength={150} />
                 </label>
-                <label>
+                <label key="phone">
                   Teléfono <span className="optional-label">Opcional</span>
                   <input name="phone" type="tel" maxLength={30} />
                 </label>
               </>
             )}
-            <label>
+            <label key="password">
               Contraseña
               <input
                 name="password"
@@ -150,7 +187,7 @@ export function AccessPage({
               {mode !== 'login' && <small>Mínimo 8 caracteres; máximo 72 bytes UTF-8.</small>}
             </label>
             {mode !== 'login' && (
-              <label>
+              <label key="confirmPassword">
                 Confirmar contraseña
                 <input name="confirmPassword" type="password" autoComplete="new-password" required />
               </label>
@@ -159,23 +196,32 @@ export function AccessPage({
               {submitting
                 ? 'Procesando…'
                 : mode === 'login'
-                  ? 'Entrar a mi cuenta'
+                  ? `Iniciar sesión como ${selectedAccountType}`
                   : 'Crear cuenta'}
             </button>
           </form>
           <div className="access-switch">
             {mode === 'login' ? (
               <>
-                <span>¿Primera vez aquí?</span>
-                <button className="text-button" onClick={() => { setMode('customer'); setError(''); setNotice('') }}>
-                  Crear cuenta de cliente
-                </button>
-                <button className="text-button" onClick={() => { setMode('provider'); setError(''); setNotice('') }}>
-                  Registrar negocio
+                <span>
+                  {selectedAccountType === 'cliente'
+                    ? '¿No tienes cuenta de cliente?'
+                    : '¿Quieres registrar tu negocio?'}
+                </span>
+                <button
+                  className="text-button"
+                  type="button"
+                  onClick={() => {
+                    setMode(selectedAccountType === 'cliente' ? 'customer' : 'provider')
+                    setError('')
+                    setNotice('')
+                  }}
+                >
+                  {selectedAccountType === 'cliente' ? 'Regístrate' : 'Regístrate como proveedor'}
                 </button>
               </>
             ) : (
-              <button className="text-button" onClick={() => { setMode('login'); setError(''); setNotice('') }}>
+              <button className="text-button" type="button" onClick={() => { setMode('login'); setError(''); setNotice('') }}>
                 Ya tengo una cuenta · Iniciar sesión
               </button>
             )}

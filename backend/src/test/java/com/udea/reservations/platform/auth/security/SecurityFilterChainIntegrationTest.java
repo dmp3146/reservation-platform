@@ -150,6 +150,10 @@ class SecurityFilterChainIntegrationTest {
         MvcResult login = mockMvc.perform(post("/api/v1/auth/login")
                 .session(initial.session())
                 .cookie(new Cookie("JSESSIONID", oldSessionId))
+                .with(request -> {
+                    request.setRequestedSessionId(oldSessionId);
+                    return request;
+                })
                 .header("X-CSRF-TOKEN", initial.token())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(LOGIN_BODY))

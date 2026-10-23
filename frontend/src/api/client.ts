@@ -1,6 +1,7 @@
 import type {
   ApiProblem,
   ApiSuccess,
+  BookedSlot,
   Booking,
   BookingCreatePayload,
   BookingDetail,
@@ -247,6 +248,18 @@ export const api = {
 
   activeBookings(): Promise<Booking[]> {
     return data(request<ApiSuccess<Booking[]>>('/bookings/active'))
+  },
+
+  providerActiveBookings(): Promise<Booking[]> {
+    return data(request<ApiSuccess<Booking[]>>('/bookings/provider/active'))
+  },
+
+  bookedSlots(serviceId: number): Promise<BookedSlot[]> {
+    return data(
+      request<ApiSuccess<BookedSlot[]>>(
+        `/bookings/service/${serviceId}/active-slots`,
+      ),
+    )
   },
 
   bookingHistory(): Promise<Booking[]> {
