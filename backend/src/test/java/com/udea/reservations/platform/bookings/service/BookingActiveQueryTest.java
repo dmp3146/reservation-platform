@@ -90,6 +90,34 @@ class BookingActiveQueryTest {
     }
 
     @Test
+    void mapsProviderBookingsWithoutExposingCustomerDetails() {
+        Booking booking = booking(
+            58,
+            LocalDate.of(2030, 1, 5),
+            LocalTime.of(14, 0),
+            "activa",
+            "Consulta",
+            "Café Central"
+        );
+        when(bookingRepository.findAllByProviderUserIdAndStatusWithDetails(42, "activa"))
+            .thenReturn(List.of(booking));
+
+        assertThat(bookingService.findActiveForProvider(42))
+            .containsExactly(new BookingResponse(
+                58,
+                15,
+                "Consulta",
+                "Café Central",
+                LocalDate.of(2030, 1, 5),
+                LocalTime.of(14, 0),
+                LocalTime.of(14, 30),
+                "activa"
+            ));
+        verify(bookingRepository)
+            .findAllByProviderUserIdAndStatusWithDetails(42, "activa");
+    }
+
+    @Test
     void mapsLegacyBookingWithoutServiceRelationsWithoutFailing() {
         Booking legacyBooking = new Booking();
         legacyBooking.setId(57);

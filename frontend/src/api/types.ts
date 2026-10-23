@@ -64,6 +64,12 @@ export interface BookingDetail extends Booking {
   customerName: string
 }
 
+export interface BookedSlot {
+  date: string
+  startTime: string
+  endTime: string
+}
+
 export interface OccupancyReport {
   startDate: string
   endDate: string

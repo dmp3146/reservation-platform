@@ -61,6 +61,10 @@ class BookingAuthorizationIntegrationTest {
     private static final String BOOKING_PATH = "/api/v1/bookings";
     private static final String ACTIVE_BOOKINGS_PATH =
         "/api/v1/bookings/active";
+    private static final String PROVIDER_ACTIVE_BOOKINGS_PATH =
+        "/api/v1/bookings/provider/active";
+    private static final String BOOKED_SLOTS_PATH =
+        "/api/v1/bookings/service/{serviceId}/active-slots";
     private static final String BOOKING_HISTORY_PATH =
         "/api/v1/bookings/history";
     private static final String BOOKING_DETAIL_PATH =
@@ -312,6 +316,66 @@ class BookingAuthorizationIntegrationTest {
             .andExpect(jsonPath("$.data.length()").value(0));
 
         verify(bookingService).findActiveForCustomer(42);
+    }
+
+    @Test
+    void providerCanReadOnlyTheirActiveBookingsWithoutCustomerDetails()
+        throws Exception {
+        when(bookingService.findActiveForProvider(42)).thenReturn(List.of(
+            new BookingResponse(
+                58, 15, "Consulta", "Café Central",
+                LocalDate.of(2030, 1, 5),
+                LocalTime.of(14, 0), LocalTime.of(14, 30), "activa"
+            )
+        ));
+        AuthenticatedSession session = authenticatedSession("proveedor", 42);
+
+        mockMvc.perform(get(PROVIDER_ACTIVE_BOOKINGS_PATH)
+                .session(session.session())
+                .cookie(session.cookie()))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data[0].bookingId").value(58))
+            .andExpect(jsonPath("$.data[0].serviceName").value("Consulta"))
+            .andExpect(jsonPath("$.data[0].status").value("activa"))
+            .andExpect(jsonPath("$.data[0].customerName").doesNotExist());
+
+        verify(bookingService).findActiveForProvider(42);
+    }
+
+    @Test
+    void clientCannotReadProviderCalendarBookings() throws Exception {
+        AuthenticatedSession session = authenticatedSession("cliente", 42);
+
+        mockMvc.perform(get(PROVIDER_ACTIVE_BOOKINGS_PATH)
+                .session(session.session())
+                .cookie(session.cookie()))
+            .andExpect(status().isForbidden())
+            .andExpect(jsonPath("$.errorCode").value("ACCESS_DENIED"));
+
+        verifyNoInteractions(bookingService);
+    }
+
+    @Test
+    void clientCanReadOnlyBookedTimeRangesForAService() throws Exception {
+        when(bookingService.findBookedSlotsForService(15)).thenReturn(List.of(
+            new com.udea.reservations.platform.bookings.dto.BookedSlotResponse(
+                LocalDate.of(2030, 1, 5),
+                LocalTime.of(14, 0),
+                LocalTime.of(14, 30)
+            )
+        ));
+        AuthenticatedSession session = authenticatedSession("cliente", 42);
+
+        mockMvc.perform(get(BOOKED_SLOTS_PATH, 15)
+                .session(session.session())
+                .cookie(session.cookie()))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data[0].date").value("2030-01-05"))
+            .andExpect(jsonPath("$.data[0].startTime").value("14:00:00"))
+            .andExpect(jsonPath("$.data[0].endTime").value("14:30:00"))
+            .andExpect(jsonPath("$.data[0].customerName").doesNotExist());
+
+        verify(bookingService).findBookedSlotsForService(15);
     }
 
     @Test

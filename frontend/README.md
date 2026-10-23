@@ -38,8 +38,11 @@ servidor de esa API haya configurado CORS, credenciales y CSRF de forma segura.
 - Registro de cliente/proveedor, inicio de sesión, restauración de sesión y
   cierre de sesión.
 - Directorio paginado de proveedores y servicios disponibles; la reserva se
-  construye únicamente con bloques devueltos por el backend.
+  construye únicamente con bloques devueltos por el backend. Los horarios que
+  ya tienen una reserva activa se muestran atenuados y no se pueden seleccionar.
 - Gestión de servicios y bloques de disponibilidad para proveedores.
+- Agenda mensual para proveedores con sus reservas activas y detalle por día;
+  los datos de clientes no se exponen en esta vista.
 - Reservas activas, historial, detalle y cancelación para clientes.
 - Reportes de ocupación para usuarios autorizados como responsable.
 

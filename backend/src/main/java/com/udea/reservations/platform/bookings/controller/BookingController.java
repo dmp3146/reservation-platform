@@ -4,6 +4,7 @@ import com.udea.reservations.platform.auth.security.UserPrincipal;
 import com.udea.reservations.platform.bookings.dto.BookingCreateRequest;
 import com.udea.reservations.platform.bookings.dto.BookingDetailResponse;
 import com.udea.reservations.platform.bookings.dto.BookingResponse;
+import com.udea.reservations.platform.bookings.dto.BookedSlotResponse;
 import com.udea.reservations.platform.bookings.service.BookingService;
 import com.udea.reservations.platform.common.dto.ApiSuccessResponse;
 import jakarta.validation.Valid;
@@ -47,6 +48,26 @@ public class BookingController {
         return ResponseEntity.ok(new ApiSuccessResponse<>(
             "Reservas activas consultadas exitosamente.",
             bookingService.findActiveForCustomer(principal.id())
+        ));
+    }
+
+    @GetMapping("/provider/active")
+    public ResponseEntity<ApiSuccessResponse<List<BookingResponse>>> findProviderActive(
+        @AuthenticationPrincipal UserPrincipal principal
+    ) {
+        return ResponseEntity.ok(new ApiSuccessResponse<>(
+            "Reservas activas del proveedor consultadas exitosamente.",
+            bookingService.findActiveForProvider(principal.id())
+        ));
+    }
+
+    @GetMapping("/service/{serviceId}/active-slots")
+    public ResponseEntity<ApiSuccessResponse<List<BookedSlotResponse>>> findBookedSlots(
+        @PathVariable Integer serviceId
+    ) {
+        return ResponseEntity.ok(new ApiSuccessResponse<>(
+            "Horarios reservados consultados exitosamente.",
+            bookingService.findBookedSlotsForService(serviceId)
         ));
     }
 

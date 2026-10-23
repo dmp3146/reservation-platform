@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import { useAuth } from '../auth/useAuth'
+import { ThemeToggle } from './ThemeToggle'
 
 export type AppPage = 'home' | 'explore' | 'bookings' | 'provider' | 'schedules' | 'reports'
 
@@ -93,6 +94,7 @@ export function AppShell({
             <h1>{pageTitle[page]}</h1>
           </div>
           <div className="topbar-right">
+            <ThemeToggle />
             <span className="secure-indicator"><span /> Sesión activa</span>
             <div className="avatar avatar-small">{user?.name.charAt(0).toUpperCase()}</div>
           </div>

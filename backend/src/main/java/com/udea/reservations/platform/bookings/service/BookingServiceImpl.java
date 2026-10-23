@@ -3,6 +3,7 @@ package com.udea.reservations.platform.bookings.service;
 import com.udea.reservations.platform.bookings.dto.BookingCreateRequest;
 import com.udea.reservations.platform.bookings.dto.BookingDetailResponse;
 import com.udea.reservations.platform.bookings.dto.BookingResponse;
+import com.udea.reservations.platform.bookings.dto.BookedSlotResponse;
 import com.udea.reservations.platform.bookings.exception.BookingAlreadyCancelledException;
 import com.udea.reservations.platform.bookings.exception.BookingConflictException;
 import com.udea.reservations.platform.bookings.exception.BookingCompletedCannotBeCancelledException;
@@ -125,6 +126,30 @@ public class BookingServiceImpl implements BookingService {
             .stream()
             .map(BookingServiceImpl::toResponse)
             .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<BookingResponse> findActiveForProvider(
+        Integer authenticatedUserId
+    ) {
+        return bookingRepository
+            .findAllByProviderUserIdAndStatusWithDetails(
+                authenticatedUserId,
+                ACTIVE_STATUS
+            )
+            .stream()
+            .map(BookingServiceImpl::toResponse)
+            .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<BookedSlotResponse> findBookedSlotsForService(Integer serviceId) {
+        return bookingRepository.findBookedSlotsByServiceIdAndStatus(
+            serviceId,
+            ACTIVE_STATUS
+        );
     }
 
     @Override

@@ -12,6 +12,7 @@ vi.mock('../api/client', async (importOriginal) => {
       ...actual.api,
       availableServices: vi.fn(),
       availableSchedules: vi.fn(),
+      bookedSlots: vi.fn(),
       createBooking: vi.fn(),
     },
   }
@@ -42,6 +43,7 @@ describe('ExplorePage', () => {
     vi.stubGlobal('confirm', vi.fn(() => true))
     vi.mocked(api.availableServices).mockResolvedValue([service])
     vi.mocked(api.availableSchedules).mockResolvedValue([block])
+    vi.mocked(api.bookedSlots).mockResolvedValue([])
     vi.mocked(api.createBooking).mockResolvedValue({
       bookingId: 51,
       serviceId: service.id,
@@ -70,6 +72,7 @@ describe('ExplorePage', () => {
     vi.stubGlobal('confirm', vi.fn(() => true))
     vi.mocked(api.availableServices).mockResolvedValue([service])
     vi.mocked(api.availableSchedules).mockResolvedValue([block])
+    vi.mocked(api.bookedSlots).mockResolvedValue([])
     vi.mocked(api.createBooking).mockRejectedValue(new ApiError({
       errorCode: 'BOOKING_CONFLICT',
       message: 'El horario ya no está disponible.',
@@ -84,5 +87,23 @@ describe('ExplorePage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Confirmar reserva' }))
 
     expect(await screen.findByRole('alert')).toHaveTextContent('El horario ya no está disponible.')
+  })
+
+  it('shows an occupied time as unavailable and prevents selecting it', async () => {
+    vi.mocked(api.availableServices).mockResolvedValue([service])
+    vi.mocked(api.availableSchedules).mockResolvedValue([block])
+    vi.mocked(api.bookedSlots).mockResolvedValue([{
+      date: block.fecha,
+      startTime: '09:00:00',
+      endTime: '09:30:00',
+    }])
+
+    render(<ExplorePage />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Ver horarios' }))
+
+    const bookedOption = await screen.findByRole('radio', { name: /09:00/ })
+    expect(bookedOption).toBeDisabled()
+    expect(bookedOption.closest('label')).toHaveClass('slot-option-booked')
+    expect(screen.getByRole('button', { name: 'Confirmar reserva' })).toBeDisabled()
   })
 })

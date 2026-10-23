@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { ApiError, api } from '../api/client'
-import type { Provider, ScheduleBlock, ServiceOffering } from '../api/types'
+import type { BookedSlot, Provider, ScheduleBlock, ServiceOffering } from '../api/types'
 import { Alert, EmptyState, Loading } from '../components/Feedback'
 
 function slotOptions(block: ScheduleBlock, duration: number): string[] {
@@ -16,6 +16,24 @@ function slotOptions(block: ScheduleBlock, duration: number): string[] {
   return result
 }
 
+function isSlotBooked(
+  block: ScheduleBlock,
+  time: string,
+  duration: number,
+  bookedSlots: BookedSlot[],
+): boolean {
+  const slotStart = Number(time.slice(0, 2)) * 60 + Number(time.slice(3, 5))
+  const slotEnd = slotStart + duration
+  return bookedSlots.some((booked) => {
+    if (booked.date !== block.fecha) return false
+    const bookedStart = Number(booked.startTime.slice(0, 2)) * 60
+      + Number(booked.startTime.slice(3, 5))
+    const bookedEnd = Number(booked.endTime.slice(0, 2)) * 60
+      + Number(booked.endTime.slice(3, 5))
+    return slotStart < bookedEnd && slotEnd > bookedStart
+  })
+}
+
 export function ExplorePage() {
   const [tab, setTab] = useState<'services' | 'providers'>('services')
   const [services, setServices] = useState<ServiceOffering[]>([])
@@ -28,6 +46,7 @@ export function ExplorePage() {
   const [error, setError] = useState('')
   const [selected, setSelected] = useState<ServiceOffering | null>(null)
   const [schedules, setSchedules] = useState<ScheduleBlock[]>([])
+  const [bookedSlots, setBookedSlots] = useState<BookedSlot[]>([])
   const [scheduleLoading, setScheduleLoading] = useState(false)
   const [scheduleError, setScheduleError] = useState('')
   const [selectedSlot, setSelectedSlot] = useState('')
@@ -89,12 +108,19 @@ export function ExplorePage() {
   async function chooseService(service: ServiceOffering) {
     setSelected(service)
     setSchedules([])
+    setBookedSlots([])
     setSelectedSlot('')
     setNotice('')
     setScheduleError('')
     setScheduleLoading(true)
+    setBookedSlots([])
     try {
-      setSchedules(await api.availableSchedules(service.id))
+      const [available, booked] = await Promise.all([
+        api.availableSchedules(service.id),
+        api.bookedSlots(service.id),
+      ])
+      setSchedules(available)
+      setBookedSlots(booked)
     } catch (cause) {
       setScheduleError(cause instanceof Error ? cause.message : 'Error al consultar horarios.')
     } finally {
@@ -215,21 +241,41 @@ export function ExplorePage() {
             ) : (
               <>
                 <p className="field-label">Elige una hora disponible</p>
+                <p className="booking-availability-key">
+                  <span className="availability-key-available" /> Disponible
+                  <span className="availability-key-booked" /> Reservado
+                </p>
                 <div className="schedule-options">
-                  {schedules.flatMap((block) => slotOptions(block, selected.duracionMinutos).map((time) => (
-                    <label className={`slot-option ${selectedSlot === `${block.id}|${time}` ? 'selected' : ''}`} key={`${block.id}-${time}`}>
-                      <input
-                        type="radio"
-                        name="booking-slot"
-                        value={`${block.id}|${time}`}
-                        checked={selectedSlot === `${block.id}|${time}`}
-                        onChange={(event) => setSelectedSlot(event.target.value)}
-                      />
-                      <span><strong>{block.fecha}</strong><small>{time} — {block.horaFin}</small></span>
-                    </label>
-                  )))}
+                  {schedules.flatMap((block) =>
+                    slotOptions(block, selected.duracionMinutos).map((time) => {
+                      const isBooked = isSlotBooked(
+                        block,
+                        time,
+                        selected.duracionMinutos,
+                        bookedSlots,
+                      )
+                      const value = `${block.id}|${time}`
+                      return (
+                        <label
+                          className={`slot-option ${selectedSlot === value ? 'selected' : ''} ${isBooked ? 'slot-option-booked' : ''}`}
+                          key={`${block.id}-${time}`}
+                        >
+                          <input
+                            type="radio"
+                            name="booking-slot"
+                            value={value}
+                            checked={selectedSlot === value}
+                            disabled={isBooked}
+                            onChange={(event) => setSelectedSlot(event.target.value)}
+                          />
+                          <span><strong>{block.fecha}</strong><small>{time} — {block.horaFin}</small></span>
+                          <small className="slot-status">{isBooked ? 'Reservado' : 'Disponible'}</small>
+                        </label>
+                      )
+                    }),
+                  )}
                 </div>
-                <p className="form-hint">Los bloques representan disponibilidad declarada. Si alguien reservó el horario recientemente, el backend responderá con un conflicto.</p>
+                <p className="form-hint">Los horarios reservados aparecen atenuados y no se pueden seleccionar. El backend confirma la disponibilidad al guardar.</p>
               </>
             )}
             <button className="button button-primary button-full" disabled={!selectedSlot || submitting || scheduleLoading} onClick={() => void bookSelected()}>
